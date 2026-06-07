@@ -1138,6 +1138,11 @@ table tr:hover td {
 }
 
 /* --- TAB 3: REPORTS & ANALYTICS --- */
+#reports-tab {
+  flex-direction: column;
+  overflow-y: auto;
+}
+
 .dashboard-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -1191,8 +1196,8 @@ table tr:hover td {
 .report-split-layout {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  flex: 1;
-  overflow: hidden;
+  min-height: 380px;
+  margin-bottom: 20px;
 }
 
 .report-chart-card, 
@@ -1560,4 +1565,17 @@ table tr:hover td {
   text-align: center;
   margin-top: 15px;
   font-size: 11px;
+}
+
+/* Empty State Placeholder */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  text-align: center;
+  color: var(--text-muted);
+  gap: 16px;
+  width: 100%;
 }
