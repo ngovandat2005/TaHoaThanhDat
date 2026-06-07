@@ -1,0 +1,13 @@
+{
+  "name": "tap-hoa-thanh-dat-pos",
+  "version": "1.0.0",
+  "description": "Hệ thống POS bán hàng tại quầy cho Tạp Hóa Thành Đạt",
+  "main": "index.html",
+  "scripts": {
+    "start": "npx http-server -p 8080"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  }
+}
