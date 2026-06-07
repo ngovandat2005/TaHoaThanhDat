@@ -1579,3 +1579,215 @@ table tr:hover td {
   gap: 16px;
   width: 100%;
 }
+
+/* --- MOBILE RESPONSIVENESS (Screens below 768px) --- */
+@media (max-width: 768px) {
+  /* Layout adjustments */
+  .app-container {
+    grid-template-columns: 1fr;
+    height: calc(100vh - 60px); /* leave space for bottom nav */
+  }
+
+  .sidebar {
+    display: none !important; /* Hide sidebar on mobile */
+  }
+
+  /* Bottom navigation styling */
+  .bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background-color: var(--bg-sidebar); /* match desktop sidebar color for consistency */
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    z-index: 1000;
+  }
+
+  .bottom-nav .menu-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 0;
+    flex: 1;
+    font-size: 10px;
+    color: rgba(248, 250, 252, 0.6);
+  }
+
+  .bottom-nav .menu-item .menu-icon {
+    width: 20px;
+    height: 20px;
+    opacity: 0.8;
+    margin: 0;
+  }
+
+  .bottom-nav .menu-item.active {
+    background: transparent;
+    color: var(--primary-color);
+    box-shadow: none;
+    font-weight: 700;
+  }
+  
+  .bottom-nav .menu-item.active .menu-icon {
+    opacity: 1;
+    color: var(--primary-color);
+  }
+
+  .bottom-nav .menu-item span {
+    display: block;
+  }
+
+  /* Main Workspace adjustments */
+  .main-content {
+    height: calc(100vh - 60px);
+    overflow-y: auto;
+  }
+
+  .top-header {
+    padding: 0 15px;
+    height: 60px;
+  }
+
+  .header-title h1 {
+    font-size: 16px;
+  }
+
+  .header-actions {
+    gap: 10px;
+  }
+
+  .datetime-display {
+    display: none; /* Hide date/time on mobile header to save space */
+  }
+
+  /* POS Tab Mobile Styling */
+  .pos-layout {
+    grid-template-columns: 1fr;
+    height: auto;
+    overflow-y: auto;
+  }
+
+  .pos-products-panel {
+    padding: 12px;
+    border-right: none;
+    max-height: 400px;
+    overflow-y: auto;
+  }
+
+  .pos-cart-panel {
+    border-top: 1px solid var(--border-color);
+    height: auto;
+    overflow: visible;
+  }
+
+  .products-grid {
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 10px;
+  }
+
+  .product-card {
+    min-height: 120px;
+    padding: 8px;
+  }
+
+  .product-card-info h4 {
+    font-size: 11.5px;
+    height: 32px;
+  }
+
+  .checkout-panel {
+    padding: 12px;
+  }
+
+  .fast-cash-btn {
+    min-width: 50px;
+    font-size: 10px;
+    padding: 4px 2px;
+  }
+
+  /* Inventory Tab Mobile Styling */
+  .card {
+    margin: 10px;
+  }
+
+  .card-header {
+    padding: 12px 15px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .header-actions-row {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .header-actions-row input,
+  .header-actions-row select,
+  .header-actions-row button {
+    flex: 1;
+    min-width: 120px;
+    font-size: 12px;
+    padding: 6px 10px;
+  }
+
+  table th, table td {
+    padding: 10px 12px;
+    font-size: 12px;
+  }
+
+  /* Reports Tab Mobile Styling */
+  .dashboard-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    padding: 10px;
+  }
+
+  .summary-card {
+    padding: 12px;
+    gap: 10px;
+  }
+
+  .card-icon {
+    width: 36px;
+    height: 36px;
+  }
+
+  .card-icon svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .card-info h3 {
+    font-size: 14px;
+  }
+
+  .report-split-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .report-chart-card, 
+  .report-history-card {
+    margin: 0 10px 15px 10px;
+  }
+
+  /* Settings Tab Mobile Styling */
+  .settings-layout {
+    grid-template-columns: 1fr;
+    padding: 10px;
+    gap: 15px;
+  }
+
+  .settings-layout .card {
+    margin: 0;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+}
