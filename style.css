@@ -1580,6 +1580,11 @@ table tr:hover td {
   width: 100%;
 }
 
+/* Bottom Navigation (Hidden on desktop) */
+.bottom-nav {
+  display: none;
+}
+
 /* --- MOBILE RESPONSIVENESS (Screens below 768px) --- */
 @media (max-width: 768px) {
   /* Layout adjustments */
