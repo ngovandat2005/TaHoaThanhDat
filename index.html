@@ -706,19 +706,23 @@
 
   <!-- CAMERA SCANNER MODAL -->
   <div id="camera-scanner-modal" class="modal-backdrop no-print" style="display: none;">
-    <div class="modal modal-md">
+    <div class="modal modal-md" style="max-width: 480px; width: 95vw;">
       <div class="modal-header">
-        <h3>Quét Mã Vạch Bằng Camera</h3>
+        <h3 style="display: flex; align-items: center; gap: 8px;">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="width: 20px; height: 20px;"><path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+          Quét Mã Vạch Bằng Camera
+        </h3>
         <button class="close-modal" id="btn-close-scanner-modal">&times;</button>
       </div>
-      <div class="modal-body" style="padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 15px;">
-        <div id="camera-reader-container" style="width: 100%; max-width: 400px; border-radius: var(--border-radius-md); overflow: hidden; background: #000; position: relative;">
-          <div id="camera-reader" style="width: 100%;"></div>
-        </div>
-        <p class="text-muted text-sm text-center" style="margin-top: 10px;">Đưa mã vạch của sản phẩm vào khung camera để tự động quét.</p>
+      <div class="modal-body" style="padding: 12px; background: #0a0a0a;">
+        <!-- Camera video UI is injected here dynamically by JS -->
+        <div id="camera-reader" style="width: 100%; min-height: 280px; border-radius: 8px; overflow: hidden; background: #000;"></div>
+        <p class="text-muted text-sm text-center" style="margin-top: 10px; color: #aaa; font-size: 12px;">
+          Hướng camera vào <strong style="color: #00e676;">mã vạch</strong> trên sản phẩm để tự động nhận diện
+        </p>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-outline" id="btn-close-scanner-modal-footer">Đóng Camera</button>
+        <button type="button" class="btn btn-outline btn-block" id="btn-close-scanner-modal-footer">✕ Đóng Camera</button>
       </div>
     </div>
   </div>

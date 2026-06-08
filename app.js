@@ -1425,93 +1425,163 @@ function deleteHeldCart(index) {
   showToast('Đã xóa đơn hàng nháp.', 'info');
 }
 
-// Camera Barcode/QR Scanner Logic
+// ============================================================
+// Camera Barcode Scanner - Native Web API Implementation
+// Uses MediaDevices + BarcodeDetector (native, fast, no CDN)
+// Falls back to html5-qrcode library if BarcodeDetector unavailable
+// ============================================================
+let cameraStream = null;
+let scanAnimationFrame = null;
 let html5QrcodeScanner = null;
 
 function startCameraScanner() {
   el.cameraScannerModal.style.display = 'flex';
-  
-  if (typeof Html5Qrcode === 'undefined') {
-    showToast('Lỗi tải thư viện quét camera. Vui lòng tải lại trang!', 'danger');
+
+  // Prefer native BarcodeDetector API (Chrome Android, iOS 16+)
+  if (typeof BarcodeDetector !== 'undefined') {
+    _startNativeScanner();
+  } else if (typeof Html5Qrcode !== 'undefined') {
+    _startHtml5QrcodeScanner();
+  } else {
+    showToast('Trình duyệt không hỗ trợ quét camera. Hãy dùng Chrome hoặc Safari mới nhất.', 'danger');
+    el.cameraScannerModal.style.display = 'none';
+  }
+}
+
+// --- Native BarcodeDetector implementation ---
+async function _startNativeScanner() {
+  const container = el.cameraReader;
+
+  // Build camera UI
+  container.innerHTML = `
+    <div style="position: relative; width: 100%; background: #000; border-radius: 8px; overflow: hidden;">
+      <video id="scanner-video" autoplay playsinline muted
+        style="width: 100%; display: block; max-height: 65vh; object-fit: cover;"></video>
+      <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none;">
+        <div style="width: 75%; height: 28%; border: 3px solid #00e676; border-radius: 10px;
+          box-shadow: 0 0 0 9999px rgba(0,0,0,0.45);
+          animation: scanline 1.5s ease-in-out infinite alternate;">
+        </div>
+      </div>
+      <p style="position: absolute; bottom: 12px; left: 0; right: 0; text-align: center; color: #fff; font-size: 12px; margin: 0;">
+        📷 Đưa mã vạch vào khung xanh
+      </p>
+    </div>
+  `;
+
+  // Add scanning animation style if not already present
+  if (!document.getElementById('scanner-style')) {
+    const style = document.createElement('style');
+    style.id = 'scanner-style';
+    style.textContent = `
+      @keyframes scanline {
+        from { box-shadow: 0 0 0 9999px rgba(0,0,0,0.45), inset 0 -90% 0 rgba(0,230,118,0.12); }
+        to   { box-shadow: 0 0 0 9999px rgba(0,0,0,0.45), inset 0  90% 0 rgba(0,230,118,0.12); }
+      }`;
+    document.head.appendChild(style);
+  }
+
+  const video = document.getElementById('scanner-video');
+
+  try {
+    cameraStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false
+    });
+    video.srcObject = cameraStream;
+    await video.play();
+  } catch (err) {
+    console.error('Camera access denied:', err);
+    showToast('Không mở được camera! Hãy cấp quyền camera cho trình duyệt.', 'danger');
+    el.cameraScannerModal.style.display = 'none';
     return;
   }
-  
+
+  const detector = new BarcodeDetector({
+    formats: ['ean_13', 'ean_8', 'code_128', 'qr_code', 'upc_a', 'upc_e', 'code_39', 'itf']
+  });
+
+  const scanFrame = async () => {
+    if (!cameraStream || video.readyState < video.HAVE_ENOUGH_DATA) {
+      scanAnimationFrame = requestAnimationFrame(scanFrame);
+      return;
+    }
+    try {
+      const barcodes = await detector.detect(video);
+      if (barcodes.length > 0) {
+        const code = barcodes[0].rawValue;
+        if (navigator.vibrate) navigator.vibrate(120);
+        stopCameraScanner();
+        handleBarcodeScan(code);
+        return;
+      }
+    } catch (_) {}
+    scanAnimationFrame = requestAnimationFrame(scanFrame);
+  };
+
+  scanAnimationFrame = requestAnimationFrame(scanFrame);
+}
+
+// --- html5-qrcode library fallback ---
+function _startHtml5QrcodeScanner() {
   if (html5QrcodeScanner) {
-    stopCameraScanner();
+    try { html5QrcodeScanner.stop(); } catch (_) {}
+    html5QrcodeScanner = null;
   }
-  
-  html5QrcodeScanner = new Html5Qrcode("camera-reader");
-  
-  // Explicitly configure formats for faster and more accurate decoding
-  const formatsToSupport = [
-    Html5QrcodeSupportedFormats.EAN_13,
-    Html5QrcodeSupportedFormats.EAN_8,
-    Html5QrcodeSupportedFormats.CODE_128,
-    Html5QrcodeSupportedFormats.QR_CODE,
-    Html5QrcodeSupportedFormats.UPC_A,
-    Html5QrcodeSupportedFormats.UPC_E
-  ];
+
+  el.cameraReader.innerHTML = `<div style="min-height: 250px; background: #000; border-radius: 8px;"></div>`;
+
+  html5QrcodeScanner = new Html5Qrcode('camera-reader');
 
   const config = {
-    fps: 20, // Increase frame rate for faster detection
-    qrbox: (width, height) => {
-      // Wider box to fit barcodes easily
-      const boxWidth = Math.floor(width * 0.85);
-      const boxHeight = Math.floor(height * 0.4);
-      return {
-        width: boxWidth,
-        height: Math.max(140, boxHeight)
-      };
-    },
-    experimentalFeatures: {
-      useBarCodeDetectorIfSupported: true 
-    },
-    formatsToSupport: formatsToSupport
+    fps: 15,
+    qrbox: (w, h) => ({ width: Math.floor(w * 0.8), height: Math.max(120, Math.floor(h * 0.35)) }),
+    experimentalFeatures: { useBarCodeDetectorIfSupported: false },
+    formatsToSupport: [
+      Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8,
+      Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.QR_CODE,
+      Html5QrcodeSupportedFormats.UPC_A, Html5QrcodeSupportedFormats.UPC_E
+    ]
   };
-  
-  // Request HD camera resolution to make narrow barcode lines sharp and readable
-  const cameraConstraints = {
-    facingMode: "environment",
-    width: { min: 640, ideal: 1280, max: 1920 },
-    height: { min: 480, ideal: 720, max: 1080 }
-  };
-  
+
   html5QrcodeScanner.start(
-    cameraConstraints, 
+    { facingMode: 'environment' },
     config,
-    (decodedText, decodedResult) => {
-      if (navigator.vibrate) {
-        navigator.vibrate(100);
-      }
+    (decodedText) => {
+      if (navigator.vibrate) navigator.vibrate(120);
       stopCameraScanner();
       handleBarcodeScan(decodedText);
     },
-    (errorMessage) => {
-      // Ignore scanning error frames to prevent console clutter
-    }
+    () => {} // Ignore per-frame errors
   ).catch(err => {
-    console.error("Camera access failed:", err);
-    showToast("Không truy cập được Camera! Hãy chắc chắn bạn đã cấp quyền sử dụng camera.", "danger");
+    console.error('html5-qrcode start failed:', err);
+    showToast('Không truy cập được camera! Hãy cấp quyền camera.', 'danger');
     el.cameraScannerModal.style.display = 'none';
   });
 }
 
 function stopCameraScanner() {
-  if (html5QrcodeScanner) {
-    html5QrcodeScanner.stop().then(() => {
-      html5QrcodeScanner = null;
-      el.cameraReader.innerHTML = ''; 
-      el.cameraScannerModal.style.display = 'none';
-    }).catch(err => {
-      console.error("Failed to stop scanner:", err);
-      html5QrcodeScanner = null;
-      el.cameraReader.innerHTML = '';
-      el.cameraScannerModal.style.display = 'none';
-    });
-  } else {
-    el.cameraScannerModal.style.display = 'none';
+  // Stop native stream
+  if (cameraStream) {
+    cameraStream.getTracks().forEach(t => t.stop());
+    cameraStream = null;
   }
+  if (scanAnimationFrame) {
+    cancelAnimationFrame(scanAnimationFrame);
+    scanAnimationFrame = null;
+  }
+
+  // Stop html5-qrcode if running
+  if (html5QrcodeScanner) {
+    html5QrcodeScanner.stop().catch(() => {}).finally(() => {
+      html5QrcodeScanner = null;
+    });
+  }
+
+  el.cameraReader.innerHTML = '';
+  el.cameraScannerModal.style.display = 'none';
 }
+
 
 // VietQR code Generator
 function generateVietQR() {
