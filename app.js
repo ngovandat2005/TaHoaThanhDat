@@ -265,6 +265,8 @@ async function loadSettings() {
 
 // --- CLOUD SYNC FIREBASE INTEGRATION ---
 let firestoreDb = null;
+let unsubscribeProducts = null;
+let unsubscribeInvoices = null;
 
 async function initFirebase() {
   const isEnabled = state.storeSettings.firebaseEnable;
@@ -274,6 +276,8 @@ async function initFirebase() {
   if (!isEnabled || !projId || !apiKey) {
     updateCloudStatus('disabled');
     firestoreDb = null;
+    if (unsubscribeProducts) { unsubscribeProducts(); unsubscribeProducts = null; }
+    if (unsubscribeInvoices) { unsubscribeInvoices(); unsubscribeInvoices = null; }
     return;
   }
 
@@ -289,6 +293,10 @@ async function initFirebase() {
     if (firebase.apps.length > 0) {
       await firebase.app().delete();
     }
+
+    // Unsubscribe from previous listeners to avoid duplicates
+    if (unsubscribeProducts) { unsubscribeProducts(); unsubscribeProducts = null; }
+    if (unsubscribeInvoices) { unsubscribeInvoices(); unsubscribeInvoices = null; }
 
     firebase.initializeApp(firebaseConfig);
     firestoreDb = firebase.firestore();
@@ -326,10 +334,78 @@ async function initFirebase() {
       if (firestoreDb) updateCloudStatus('offline');
     });
 
+    // 1. Listen to real-time changes in products collection
+    unsubscribeProducts = firestoreDb.collection('products').onSnapshot(snapshot => {
+      let hasChanges = false;
+      const promises = [];
+
+      snapshot.docChanges().forEach(change => {
+        // Ignore changes originating from local database write
+        if (change.doc.metadata && change.doc.metadata.hasPendingWrites) return;
+
+        const product = change.doc.data();
+        if (change.type === 'added' || change.type === 'modified') {
+          promises.push(window.dbHelper.updateProduct(product));
+          hasChanges = true;
+        } else if (change.type === 'removed') {
+          promises.push(window.dbHelper.deleteProduct(product.id));
+          hasChanges = true;
+        }
+      });
+
+      if (hasChanges) {
+        Promise.all(promises).then(() => {
+          reloadProducts().then(() => {
+            renderInventoryTable();
+            refreshReports();
+          });
+        }).catch(err => console.error("Error applying cloud product changes:", err));
+      }
+    }, err => {
+      console.error("Firestore products listener failed:", err);
+    });
+
+    // 2. Listen to real-time changes in invoices collection
+    unsubscribeInvoices = firestoreDb.collection('invoices').onSnapshot(snapshot => {
+      let hasChanges = false;
+      const promises = [];
+
+      snapshot.docChanges().forEach(change => {
+        // Ignore changes originating from local database write
+        if (change.doc.metadata && change.doc.metadata.hasPendingWrites) return;
+
+        const invoice = change.doc.data();
+        if (change.type === 'added' || change.type === 'modified') {
+          promises.push(new Promise((resolve, reject) => {
+            if (!window.dbHelper.db) return reject(new Error("Database not ready"));
+            const transaction = window.dbHelper.db.transaction(['invoices'], 'readwrite');
+            const store = transaction.objectStore('invoices');
+            const req = store.put(invoice);
+            req.onsuccess = () => resolve();
+            req.onerror = () => reject(req.error);
+          }));
+          hasChanges = true;
+        } else if (change.type === 'removed') {
+          promises.push(window.dbHelper.deleteInvoice(invoice.id));
+          hasChanges = true;
+        }
+      });
+
+      if (hasChanges) {
+        Promise.all(promises).then(() => {
+          refreshReports();
+        }).catch(err => console.error("Error applying cloud invoice changes:", err));
+      }
+    }, err => {
+      console.error("Firestore invoices listener failed:", err);
+    });
+
   } catch (err) {
     console.error("Firebase init failed:", err);
     updateCloudStatus('error');
     firestoreDb = null;
+    if (unsubscribeProducts) { unsubscribeProducts(); unsubscribeProducts = null; }
+    if (unsubscribeInvoices) { unsubscribeInvoices(); unsubscribeInvoices = null; }
   }
 }
 
