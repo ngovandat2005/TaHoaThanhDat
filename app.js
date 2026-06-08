@@ -138,6 +138,13 @@ const el = {
   btnCloseHoldModal: document.getElementById('btn-close-hold-modal'),
   btnCloseHoldModalFooter: document.getElementById('btn-close-hold-modal-footer'),
 
+  // Camera Scanner Elements
+  btnScanCamera: document.getElementById('btn-scan-camera'),
+  cameraScannerModal: document.getElementById('camera-scanner-modal'),
+  cameraReader: document.getElementById('camera-reader'),
+  btnCloseScannerModal: document.getElementById('btn-close-scanner-modal'),
+  btnCloseScannerModalFooter: document.getElementById('btn-close-scanner-modal-footer'),
+
   // Warning Expiry Elements
   expiryWarningCount: document.getElementById('expiry-warning-count'),
   expiryWarningTbody: document.getElementById('expiry-warning-tbody'),
@@ -903,6 +910,11 @@ function registerPOSEvents() {
   el.btnCloseHoldModal.addEventListener('click', closeHoldModal);
   el.btnCloseHoldModalFooter.addEventListener('click', closeHoldModal);
 
+  // Camera Scanner Actions
+  el.btnScanCamera.addEventListener('click', startCameraScanner);
+  el.btnCloseScannerModal.addEventListener('click', stopCameraScanner);
+  el.btnCloseScannerModalFooter.addEventListener('click', stopCameraScanner);
+
   // Discount changes
   el.cartDiscountInput.addEventListener('input', calculateCartTotals);
   el.cartDiscountType.addEventListener('change', calculateCartTotals);
@@ -1392,6 +1404,74 @@ function deleteHeldCart(index) {
     renderHoldCartsList();
   }
   showToast('Đã xóa đơn hàng nháp.', 'info');
+}
+
+// Camera Barcode/QR Scanner Logic
+let html5QrcodeScanner = null;
+
+function startCameraScanner() {
+  el.cameraScannerModal.style.display = 'flex';
+  
+  if (typeof Html5Qrcode === 'undefined') {
+    showToast('Lỗi tải thư viện quét camera. Vui lòng tải lại trang!', 'danger');
+    return;
+  }
+  
+  if (html5QrcodeScanner) {
+    stopCameraScanner();
+  }
+  
+  html5QrcodeScanner = new Html5Qrcode("camera-reader");
+  
+  const config = {
+    fps: 10,
+    qrbox: (width, height) => {
+      const minDimension = Math.min(width, height);
+      const boxWidth = Math.floor(minDimension * 0.75);
+      const boxHeight = Math.floor(boxWidth * 0.5); // flat barcode region
+      return {
+        width: boxWidth,
+        height: Math.max(120, boxHeight)
+      };
+    },
+    aspectRatio: 1.0
+  };
+  
+  html5QrcodeScanner.start(
+    { facingMode: "environment" }, 
+    config,
+    (decodedText, decodedResult) => {
+      if (navigator.vibrate) {
+        navigator.vibrate(100);
+      }
+      stopCameraScanner();
+      handleBarcodeScan(decodedText);
+    },
+    (errorMessage) => {
+      // Ignore scanning error frames to prevent console clutter
+    }
+  ).catch(err => {
+    console.error("Camera access failed:", err);
+    showToast("Không truy cập được Camera! Hãy chắc chắn bạn đã cấp quyền sử dụng camera.", "danger");
+    el.cameraScannerModal.style.display = 'none';
+  });
+}
+
+function stopCameraScanner() {
+  if (html5QrcodeScanner) {
+    html5QrcodeScanner.stop().then(() => {
+      html5QrcodeScanner = null;
+      el.cameraReader.innerHTML = ''; 
+      el.cameraScannerModal.style.display = 'none';
+    }).catch(err => {
+      console.error("Failed to stop scanner:", err);
+      html5QrcodeScanner = null;
+      el.cameraReader.innerHTML = '';
+      el.cameraScannerModal.style.display = 'none';
+    });
+  } else {
+    el.cameraScannerModal.style.display = 'none';
+  }
 }
 
 // VietQR code Generator

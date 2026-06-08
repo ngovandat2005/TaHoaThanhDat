@@ -501,7 +501,7 @@ input, button, select, textarea {
 
 .search-input-wrapper input {
   width: 100%;
-  padding: 14px 45px 14px 48px;
+  padding: 14px 75px 14px 48px;
   border-radius: var(--border-radius-lg);
   border: 1px solid var(--border-color);
   background-color: var(--bg-card);
@@ -532,6 +532,31 @@ input, button, select, textarea {
 
 .clear-search:hover {
   color: var(--text-color);
+}
+
+.btn-scan-camera {
+  position: absolute;
+  right: 45px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px;
+  transition: color var(--transition-fast);
+}
+
+.btn-scan-camera:hover {
+  color: var(--primary-color);
+}
+
+.btn-scan-camera svg {
+  width: 22px;
+  height: 22px;
 }
 
 .category-filters-container {
