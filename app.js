@@ -1570,9 +1570,10 @@ function _startHtml5QrcodeScanner() {
   html5QrcodeScanner.start(
     { 
       facingMode: 'environment',
-      // Force higher resolution for scanning tiny barcode lines clearly on mobile devices
-      width: { min: 640, ideal: 1280, max: 1920 },
-      height: { min: 480, ideal: 720, max: 1080 }
+      // Use ideal constraints (without min/max) to request high resolution
+      // while preventing OverconstrainedError on devices with different screen ratios or in portrait mode
+      width: { ideal: 1280 },
+      height: { ideal: 720 }
     },
     scanConfig,
     (decodedText) => {
