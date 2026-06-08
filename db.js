@@ -233,6 +233,64 @@ class ThanhDatDB {
     });
   }
 
+  /**
+   * Voids (cancels) an invoice:
+   * 1. Restores stock for all items in the invoice
+   * 2. Deletes the invoice from the database
+   */
+  voidInvoice(invoiceId) {
+    return new Promise(async (resolve, reject) => {
+      try {
+        // 1. Get the invoice to restore stock
+        const transaction = this.db.transaction(['invoices', 'products'], 'readwrite');
+        const invoiceStore = transaction.objectStore('invoices');
+        const productStore = transaction.objectStore('products');
+
+        const getInvReq = invoiceStore.get(invoiceId);
+        getInvReq.onsuccess = () => {
+          const invoice = getInvReq.result;
+          if (!invoice) {
+            reject(new Error('Không tìm thấy hóa đơn!'));
+            return;
+          }
+
+          // 2. Restore stock for each item
+          let pending = invoice.items.length;
+          if (pending === 0) {
+            // No items, just delete invoice
+            const delReq = invoiceStore.delete(invoiceId);
+            delReq.onsuccess = () => resolve(true);
+            delReq.onerror = () => reject(delReq.error);
+            return;
+          }
+
+          invoice.items.forEach(item => {
+            if (!item.id) { pending--; return; }
+            const getProdReq = productStore.get(Number(item.id));
+            getProdReq.onsuccess = () => {
+              const product = getProdReq.result;
+              if (product) {
+                product.stock = (product.stock || 0) + item.quantity;
+                productStore.put(product);
+              }
+              pending--;
+              if (pending === 0) {
+                // 3. Delete the invoice after restoring all stock
+                const delReq = invoiceStore.delete(invoiceId);
+                delReq.onsuccess = () => resolve(true);
+                delReq.onerror = () => reject(delReq.error);
+              }
+            };
+            getProdReq.onerror = () => { pending--; };
+          });
+        };
+        getInvReq.onerror = () => reject(getInvReq.error);
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+
   // --- SETTINGS METHODS ---
 
   getSetting(key, defaultValue = null) {

@@ -1826,15 +1826,17 @@ function renderHistoryTable(invoices) {
     const date = new Date(inv.createdAt);
     const timeFormatted = `${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')} - ${date.toLocaleDateString('vi-VN')}`;
     const methodText = inv.paymentMethod === 'CASH' ? 'Tiền mặt' : 'Ck QR';
+    const isVoided = inv.voided === true;
     
     return `
-      <tr>
-        <td><strong>${inv.id.substring(inv.id.lastIndexOf('-') + 1)}</strong></td>
+      <tr style="${isVoided ? 'opacity:0.45; text-decoration: line-through;' : ''}">
+        <td><strong>${inv.id.substring(inv.id.lastIndexOf('-') + 1)}</strong>${isVoided ? ' <span style="color:var(--danger-color);font-size:10px;font-weight:700;">[HUỶ]</span>' : ''}</td>
         <td>${timeFormatted}</td>
         <td class="text-right" style="font-weight: 700;">${formatVND(inv.totalPrice)}</td>
         <td><span class="stock-indicator ${inv.paymentMethod === 'CASH' ? 'high' : 'medium'}">${methodText}</span></td>
-        <td class="text-center">
-          <button class="btn btn-outline btn-xs btn-view-invoice" data-id="${inv.id}">Xem</button>
+        <td class="text-center" style="white-space: nowrap;">
+          <button class="btn btn-outline btn-xs btn-view-invoice" data-id="${inv.id}" style="margin-right: 4px;">Xem</button>
+          ${!isVoided ? `<button class="btn btn-danger btn-xs btn-void-invoice" data-id="${inv.id}" title="Hủy và hoàn kho hóa đơn này" style="padding: 4px 7px;">Hủy</button>` : ''}
         </td>
       </tr>
     `;
@@ -1844,6 +1846,13 @@ function renderHistoryTable(invoices) {
   document.querySelectorAll('.btn-view-invoice').forEach(btn => {
     btn.addEventListener('click', () => {
       showInvoiceDetails(btn.getAttribute('data-id'));
+    });
+  });
+
+  // Bind void invoice click
+  document.querySelectorAll('.btn-void-invoice').forEach(btn => {
+    btn.addEventListener('click', () => {
+      voidInvoice(btn.getAttribute('data-id'));
     });
   });
 }
@@ -1931,6 +1940,47 @@ async function showInvoiceDetails(invoiceId) {
   `;
 
   el.invoiceDetailModal.style.display = 'flex';
+}
+
+// --- VOID (HỦY) INVOICE ---
+async function voidInvoice(invoiceId) {
+  // Show a friendly confirmation before voiding
+  const shortId = invoiceId.substring(invoiceId.lastIndexOf('-') + 1);
+  const confirmed = confirm(
+    `⚠️ XÁC NHẬN HỦY HÓA ĐƠN\n\nMã đơn: ${shortId}\n\n` +
+    `Hành động này sẽ:\n` +
+    `• Xóa hóa đơn khỏi hệ thống\n` +
+    `• Hoàn trả tồn kho cho tất cả sản phẩm trong đơn\n\n` +
+    `Bạn có chắc chắn muốn hủy đơn hàng này không?`
+  );
+  if (!confirmed) return;
+
+  try {
+    showToast('Đang xử lý hủy đơn hàng...', 'info', 2000);
+
+    // 1. Void invoice and restore stock in IndexedDB
+    await window.dbHelper.voidInvoice(invoiceId);
+
+    // 2. Remove from Firebase if cloud sync is enabled
+    if (firestoreDb) {
+      try {
+        await firestoreDb.collection('invoices').doc(invoiceId).delete();
+      } catch (e) {
+        console.warn('Cloud delete invoice failed:', e);
+      }
+    }
+
+    // 3. Refresh all data
+    await reloadProducts();
+    renderInventoryTable();
+    await refreshReports();
+
+    showToast(`Đã hủy hóa đơn ${shortId} và hoàn kho thành công!`, 'success');
+
+  } catch (err) {
+    console.error('Void invoice error:', err);
+    showToast('Lỗi hủy hóa đơn! Vui lòng thử lại.', 'danger');
+  }
 }
 
 // Draw a beautiful custom 7-day revenue chart using raw HTML5 Canvas API (no network or chart libraries required)
