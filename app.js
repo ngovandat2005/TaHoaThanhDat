@@ -1529,35 +1529,56 @@ function _startHtml5QrcodeScanner() {
     html5QrcodeScanner = null;
   }
 
-  el.cameraReader.innerHTML = `<div style="min-height: 250px; background: #000; border-radius: 8px;"></div>`;
+  el.cameraReader.innerHTML = '';
 
-  html5QrcodeScanner = new Html5Qrcode('camera-reader');
+  // CRITICAL: formatsToSupport MUST be in the constructor, NOT in start() config
+  const supportedFormats = [
+    Html5QrcodeSupportedFormats.EAN_13,
+    Html5QrcodeSupportedFormats.EAN_8,
+    Html5QrcodeSupportedFormats.CODE_128,
+    Html5QrcodeSupportedFormats.CODE_39,
+    Html5QrcodeSupportedFormats.QR_CODE,
+    Html5QrcodeSupportedFormats.UPC_A,
+    Html5QrcodeSupportedFormats.UPC_E,
+    Html5QrcodeSupportedFormats.ITF
+  ];
 
-  const config = {
-    fps: 15,
-    qrbox: (w, h) => ({ width: Math.floor(w * 0.8), height: Math.max(120, Math.floor(h * 0.35)) }),
-    experimentalFeatures: { useBarCodeDetectorIfSupported: false },
-    formatsToSupport: [
-      Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8,
-      Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.QR_CODE,
-      Html5QrcodeSupportedFormats.UPC_A, Html5QrcodeSupportedFormats.UPC_E
-    ]
+  html5QrcodeScanner = new Html5Qrcode('camera-reader', {
+    formatsToSupport: supportedFormats,
+    verbose: false
+  });
+
+  const scanConfig = {
+    fps: 20,
+    qrbox: (viewfinderWidth, viewfinderHeight) => {
+      // Make scan region large - almost full width, tall enough for barcodes
+      return {
+        width: Math.floor(viewfinderWidth * 0.88),
+        height: Math.max(160, Math.floor(viewfinderHeight * 0.45))
+      };
+    },
+    aspectRatio: 1.0,
+    disableFlip: false,
+    experimentalFeatures: {
+      useBarCodeDetectorIfSupported: true
+    }
   };
 
   html5QrcodeScanner.start(
     { facingMode: 'environment' },
-    config,
+    scanConfig,
     (decodedText) => {
       if (navigator.vibrate) navigator.vibrate(120);
       stopCameraScanner();
       handleBarcodeScan(decodedText);
     },
-    () => {} // Ignore per-frame errors
+    () => {} // Ignore per-frame scan misses
   ).catch(err => {
     console.error('html5-qrcode start failed:', err);
     showToast('Không truy cập được camera! Hãy cấp quyền camera.', 'danger');
     el.cameraScannerModal.style.display = 'none';
   });
+
 }
 
 function stopCameraScanner() {
