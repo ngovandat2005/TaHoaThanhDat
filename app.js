@@ -1428,6 +1428,20 @@ function generateVietQR() {
 
 // Checkout and Trigger Thermal Print
 async function checkoutAndPrint() {
+  // Verify that products in the cart are still valid (not expired)
+  for (let item of state.cart) {
+    const dbProd = state.products.find(p => p.id === item.id);
+    if (dbProd && dbProd.expiryDate) {
+      const today = new Date();
+      today.setHours(0,0,0,0);
+      const exp = new Date(dbProd.expiryDate);
+      if (exp < today) {
+        showToast(`Không thể thanh toán! Sản phẩm "${item.name}" đã hết hạn sử dụng.`, 'danger');
+        return;
+      }
+    }
+  }
+
   const subtotal = state.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const total = parseVND(el.cartTotal.textContent);
   const given = parseVND(el.paymentCashGiven.value);
