@@ -1423,25 +1423,42 @@ function startCameraScanner() {
   
   html5QrcodeScanner = new Html5Qrcode("camera-reader");
   
+  // Explicitly configure formats for faster and more accurate decoding
+  const formatsToSupport = [
+    Html5QrcodeSupportedFormats.EAN_13,
+    Html5QrcodeSupportedFormats.EAN_8,
+    Html5QrcodeSupportedFormats.CODE_128,
+    Html5QrcodeSupportedFormats.QR_CODE,
+    Html5QrcodeSupportedFormats.UPC_A,
+    Html5QrcodeSupportedFormats.UPC_E
+  ];
+
   const config = {
-    fps: 15,
+    fps: 20, // Increase frame rate for faster detection
     qrbox: (width, height) => {
-      // Barcodes are wide, make the box wider (85% of width) and flat (35% of height)
+      // Wider box to fit barcodes easily
       const boxWidth = Math.floor(width * 0.85);
-      const boxHeight = Math.floor(height * 0.35);
+      const boxHeight = Math.floor(height * 0.4);
       return {
         width: boxWidth,
-        height: Math.max(130, boxHeight)
+        height: Math.max(140, boxHeight)
       };
     },
-    aspectRatio: 1.0,
     experimentalFeatures: {
-      useBarCodeDetectorIfSupported: true // Uses mobile browser's hardware-accelerated scanner
-    }
+      useBarCodeDetectorIfSupported: true 
+    },
+    formatsToSupport: formatsToSupport
+  };
+  
+  // Request HD camera resolution to make narrow barcode lines sharp and readable
+  const cameraConstraints = {
+    facingMode: "environment",
+    width: { min: 640, ideal: 1280, max: 1920 },
+    height: { min: 480, ideal: 720, max: 1080 }
   };
   
   html5QrcodeScanner.start(
-    { facingMode: "environment" }, 
+    cameraConstraints, 
     config,
     (decodedText, decodedResult) => {
       if (navigator.vibrate) {
