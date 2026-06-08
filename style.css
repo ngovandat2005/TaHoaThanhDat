@@ -1671,16 +1671,22 @@ table tr:hover td {
 
 /* --- MOBILE RESPONSIVENESS (Screens below 768px) --- */
 @media (max-width: 768px) {
-  /* Prevent the whole page from scrolling horizontally */
-  body {
+  /* ========================================
+   * CRITICAL: Prevent ANY horizontal overflow
+   * Root fix for the 2x-width layout bug
+   * ======================================== */
+  html, body {
     overflow-x: hidden;
+    max-width: 100vw;
   }
 
   /* Layout adjustments */
   .app-container {
     grid-template-columns: 1fr;
     height: calc(100vh - 60px); /* leave space for bottom nav */
-    overflow-x: hidden;
+    overflow: hidden;
+    width: 100%;
+    max-width: 100vw;
   }
 
   .sidebar {
@@ -1773,7 +1779,10 @@ table tr:hover td {
   .pos-layout {
     grid-template-columns: 1fr;
     height: auto;
-    overflow-y: auto;
+    /* CRITICAL: min-width:0 allows grid items to shrink below content size */
+    min-width: 0;
+    overflow-x: hidden;
+    width: 100%;
   }
 
   .pos-products-panel {
@@ -1783,6 +1792,9 @@ table tr:hover td {
     height: auto;
     overflow: visible;
     display: block;
+    min-width: 0;   /* allow shrinking in grid */
+    width: 100%;
+    box-sizing: border-box;
   }
 
   .products-grid-container {
@@ -1795,16 +1807,20 @@ table tr:hover td {
     border-top: 1px solid var(--border-color);
     height: auto;
     overflow: visible;
+    min-width: 0;   /* allow shrinking in grid */
+    width: 100%;
+    box-sizing: border-box;
   }
 
   /* Make cart items table scroll horizontally if needed */
   .cart-items-container {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
+    max-width: 100%;
   }
 
   .cart-table {
-    min-width: 340px;
+    min-width: 300px;
   }
 
   /* Cart header wraps cleanly on mobile */
@@ -1816,6 +1832,16 @@ table tr:hover td {
 
   .hold-cart-menu {
     flex-wrap: wrap;
+  }
+
+  /* Force checkout panel and children to stay within screen */
+  .checkout-panel,
+  .payment-details,
+  .pricing-summary {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    min-width: 0;
   }
 
 
@@ -1846,19 +1872,44 @@ table tr:hover td {
 
   .input-group-inline input {
     width: 100%;
+    box-sizing: border-box;
   }
 
-  /* Fix fast cash buttons - wrap them into 2 rows of 4 */
+  /* Pricing summary: show values on a new line so they are always visible */
+  .summary-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 3px;
+  }
+
+  .summary-row.total .highlight-total {
+    font-size: 20px;
+  }
+
+  /* Discount row stays horizontal because input is small */
+  .summary-row:has(.discount-input-group) {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  /* ============================================================
+   * FAST-CASH BUTTONS: Use CSS Grid instead of Flex for
+   * predictable 4-column layout regardless of container width
+   * ============================================================ */
   .fast-cash-container {
-    flex-wrap: wrap;
+    display: grid !important;
+    grid-template-columns: repeat(4, 1fr);
     gap: 6px;
+    width: 100%;
   }
 
   .fast-cash-btn {
-    flex: 0 0 calc(25% - 5px);
+    flex: none;
+    width: 100%;
     min-width: unset;
     font-size: 11px;
-    padding: 6px 2px;
+    padding: 8px 2px;
     text-align: center;
   }
 
