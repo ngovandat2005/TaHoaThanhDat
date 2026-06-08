@@ -1734,6 +1734,16 @@ table tr:hover td {
   .main-content {
     height: calc(100vh - 60px);
     overflow-y: auto;
+    display: block;
+  }
+
+  .tab-pane {
+    height: auto;
+    overflow: visible;
+  }
+
+  .tab-pane.active {
+    display: block;
   }
 
   .top-header {
