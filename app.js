@@ -1559,22 +1559,19 @@ function _startHtml5QrcodeScanner() {
         height: Math.max(100, height)
       };
     },
-    // Omit aspectRatio: 1.0 to allow wide landscape format (16:9 or 4:3)
-    // This lets the user get closer to the barcode horizontally without cutting off the edges
     disableFlip: false,
+    videoConstraints: {
+      facingMode: 'environment',
+      width: { ideal: 1280 },
+      height: { ideal: 720 }
+    },
     experimentalFeatures: {
       useBarCodeDetectorIfSupported: true
     }
   };
 
   html5QrcodeScanner.start(
-    { 
-      facingMode: 'environment',
-      // Use ideal constraints (without min/max) to request high resolution
-      // while preventing OverconstrainedError on devices with different screen ratios or in portrait mode
-      width: { ideal: 1280 },
-      height: { ideal: 720 }
-    },
+    { facingMode: 'environment' },
     scanConfig,
     (decodedText) => {
       if (navigator.vibrate) navigator.vibrate(120);
