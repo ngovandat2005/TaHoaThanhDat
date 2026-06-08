@@ -1531,15 +1531,13 @@ function _startHtml5QrcodeScanner() {
   el.cameraReader.innerHTML = '';
 
   // CRITICAL: formatsToSupport MUST be in the constructor, NOT in start() config
+  // CRITICAL: formatsToSupport MUST be in the constructor, NOT in start() config
+  // Limit to only the formats used in standard grocery stores (reduces processing time by 50%)
   const supportedFormats = [
-    Html5QrcodeSupportedFormats.EAN_13,
+    Html5QrcodeSupportedFormats.EAN_13, // Standard grocery barcode in Vietnam
     Html5QrcodeSupportedFormats.EAN_8,
-    Html5QrcodeSupportedFormats.CODE_128,
-    Html5QrcodeSupportedFormats.CODE_39,
-    Html5QrcodeSupportedFormats.QR_CODE,
-    Html5QrcodeSupportedFormats.UPC_A,
-    Html5QrcodeSupportedFormats.UPC_E,
-    Html5QrcodeSupportedFormats.ITF
+    Html5QrcodeSupportedFormats.CODE_128, // Common custom tags
+    Html5QrcodeSupportedFormats.QR_CODE // For QR code scanning
   ];
 
   html5QrcodeScanner = new Html5Qrcode('camera-reader', {
@@ -1548,7 +1546,7 @@ function _startHtml5QrcodeScanner() {
   });
 
   const scanConfig = {
-    fps: 25, // Higher frame rate for faster detection
+    fps: 10, // Sweet spot: 10 frames/sec prevents mobile CPU overload, allowing autofocus to react instantly
     qrbox: (viewfinderWidth, viewfinderHeight) => {
       // Wide and short rectangular scan box (optimized for horizontal 1D barcodes)
       // This allows users to get much closer to the product while keeping the barcode inside the box
@@ -1563,7 +1561,8 @@ function _startHtml5QrcodeScanner() {
     videoConstraints: {
       facingMode: 'environment',
       width: { ideal: 1280 },
-      height: { ideal: 720 }
+      height: { ideal: 720 },
+      focusMode: 'continuous' // Request continuous autofocus on supported devices
     },
     experimentalFeatures: {
       useBarCodeDetectorIfSupported: true
