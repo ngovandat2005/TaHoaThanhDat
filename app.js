@@ -2451,11 +2451,32 @@ function registerSettingsEvents() {
   el.btnResetDb.addEventListener('click', async () => {
     if (confirm('CẢNH BÁO CỰC KỲ QUAN TRỌNG: Bạn có chắc chắn muốn xóa TOÀN BỘ dữ liệu gồm hàng hóa và hóa đơn lịch sử? Hệ thống sẽ trống trơn.')) {
       if (confirm('Lần cuối xác nhận: Chắc chắn xóa vĩnh viễn?')) {
+        // 1. Clear local IndexedDB database
         await window.dbHelper.clearAllProducts();
         
         const allInvoices = await window.dbHelper.getAllInvoices();
         for (let inv of allInvoices) {
           await window.dbHelper.deleteInvoice(inv.id);
+        }
+
+        // 2. If Cloud Sync is enabled, also clear Firestore database collections
+        if (firestoreDb) {
+          try {
+            showToast('Đang xóa dữ liệu trên Đám Mây...', 'info');
+            
+            const productSnapshot = await firestoreDb.collection('products').get();
+            const productPromises = productSnapshot.docs.map(doc => doc.ref.delete());
+            await Promise.all(productPromises);
+
+            const invoiceSnapshot = await firestoreDb.collection('invoices').get();
+            const invoicePromises = invoiceSnapshot.docs.map(doc => doc.ref.delete());
+            await Promise.all(invoicePromises);
+            
+            showToast('Đã xóa dữ liệu trên Đám Mây thành công!', 'success');
+          } catch (e) {
+            console.error("Failed to clear Firestore collections on reset:", e);
+            showToast('Lỗi khi xóa dữ liệu đám mây!', 'danger');
+          }
         }
         
         showToast('Hệ thống đã reset sạch sẽ.', 'danger');
