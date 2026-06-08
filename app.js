@@ -2130,20 +2130,36 @@ async function voidInvoice(invoiceId) {
   try {
     showToast('Đang xử lý hủy đơn hàng...', 'info', 2000);
 
+    // Get the invoice details first to know which products need stock syncing
+    const invoices = await window.dbHelper.getAllInvoices();
+    const inv = invoices.find(i => i.id === invoiceId);
+
     // 1. Void invoice and restore stock in IndexedDB
     await window.dbHelper.voidInvoice(invoiceId);
 
-    // 2. Remove from Firebase if cloud sync is enabled
+    // 2. Refresh all local data first so state.products has the updated stock numbers
+    await reloadProducts();
+
+    // 3. Remove from Firebase and sync updated stocks if cloud sync is enabled
     if (firestoreDb) {
       try {
         await firestoreDb.collection('invoices').doc(invoiceId).delete();
+        
+        // Sync updated product stocks to cloud
+        if (inv && inv.items) {
+          for (let item of inv.items) {
+            const p = state.products.find(prod => prod.id === Number(item.id));
+            if (p) {
+              await syncProductToCloud(p);
+            }
+          }
+        }
       } catch (e) {
-        console.warn('Cloud delete invoice failed:', e);
+        console.warn('Cloud delete/sync invoice failed:', e);
       }
     }
 
-    // 3. Refresh all data
-    await reloadProducts();
+    // 4. Refresh reports and tables
     renderInventoryTable();
     await refreshReports();
 
