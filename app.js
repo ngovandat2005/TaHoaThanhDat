@@ -1424,17 +1424,20 @@ function startCameraScanner() {
   html5QrcodeScanner = new Html5Qrcode("camera-reader");
   
   const config = {
-    fps: 10,
+    fps: 15,
     qrbox: (width, height) => {
-      const minDimension = Math.min(width, height);
-      const boxWidth = Math.floor(minDimension * 0.75);
-      const boxHeight = Math.floor(boxWidth * 0.5); // flat barcode region
+      // Barcodes are wide, make the box wider (85% of width) and flat (35% of height)
+      const boxWidth = Math.floor(width * 0.85);
+      const boxHeight = Math.floor(height * 0.35);
       return {
         width: boxWidth,
-        height: Math.max(120, boxHeight)
+        height: Math.max(130, boxHeight)
       };
     },
-    aspectRatio: 1.0
+    aspectRatio: 1.0,
+    experimentalFeatures: {
+      useBarCodeDetectorIfSupported: true // Uses mobile browser's hardware-accelerated scanner
+    }
   };
   
   html5QrcodeScanner.start(
