@@ -1548,15 +1548,19 @@ function _startHtml5QrcodeScanner() {
   });
 
   const scanConfig = {
-    fps: 20,
+    fps: 25, // Higher frame rate for faster detection
     qrbox: (viewfinderWidth, viewfinderHeight) => {
-      // Make scan region large - almost full width, tall enough for barcodes
+      // Wide and short rectangular scan box (optimized for horizontal 1D barcodes)
+      // This allows users to get much closer to the product while keeping the barcode inside the box
+      const width = Math.floor(viewfinderWidth * 0.9);
+      const height = Math.floor(viewfinderHeight * 0.3);
       return {
-        width: Math.floor(viewfinderWidth * 0.88),
-        height: Math.max(160, Math.floor(viewfinderHeight * 0.45))
+        width: width,
+        height: Math.max(100, height)
       };
     },
-    aspectRatio: 1.0,
+    // Omit aspectRatio: 1.0 to allow wide landscape format (16:9 or 4:3)
+    // This lets the user get closer to the barcode horizontally without cutting off the edges
     disableFlip: false,
     experimentalFeatures: {
       useBarCodeDetectorIfSupported: true
@@ -1564,7 +1568,12 @@ function _startHtml5QrcodeScanner() {
   };
 
   html5QrcodeScanner.start(
-    { facingMode: 'environment' },
+    { 
+      facingMode: 'environment',
+      // Force higher resolution for scanning tiny barcode lines clearly on mobile devices
+      width: { min: 640, ideal: 1280, max: 1920 },
+      height: { min: 480, ideal: 720, max: 1080 }
+    },
     scanConfig,
     (decodedText) => {
       if (navigator.vibrate) navigator.vibrate(120);
