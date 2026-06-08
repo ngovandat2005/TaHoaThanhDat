@@ -1671,10 +1671,16 @@ table tr:hover td {
 
 /* --- MOBILE RESPONSIVENESS (Screens below 768px) --- */
 @media (max-width: 768px) {
+  /* Prevent the whole page from scrolling horizontally */
+  body {
+    overflow-x: hidden;
+  }
+
   /* Layout adjustments */
   .app-container {
     grid-template-columns: 1fr;
     height: calc(100vh - 60px); /* leave space for bottom nav */
+    overflow-x: hidden;
   }
 
   .sidebar {
@@ -1791,6 +1797,28 @@ table tr:hover td {
     overflow: visible;
   }
 
+  /* Make cart items table scroll horizontally if needed */
+  .cart-items-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .cart-table {
+    min-width: 340px;
+  }
+
+  /* Cart header wraps cleanly on mobile */
+  .cart-header {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 12px 15px;
+  }
+
+  .hold-cart-menu {
+    flex-wrap: wrap;
+  }
+
+
   .products-grid {
     grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
     gap: 10px;
@@ -1810,10 +1838,28 @@ table tr:hover td {
     padding: 12px;
   }
 
+  /* Stack customer info inputs vertically on mobile */
+  .input-group-inline {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .input-group-inline input {
+    width: 100%;
+  }
+
+  /* Fix fast cash buttons - wrap them into 2 rows of 4 */
+  .fast-cash-container {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
   .fast-cash-btn {
-    min-width: 50px;
-    font-size: 10px;
-    padding: 4px 2px;
+    flex: 0 0 calc(25% - 5px);
+    min-width: unset;
+    font-size: 11px;
+    padding: 6px 2px;
+    text-align: center;
   }
 
   /* Inventory Tab Mobile Styling */
@@ -1842,9 +1888,23 @@ table tr:hover td {
     padding: 6px 10px;
   }
 
+  /* Make inventory table scroll horizontally instead of overflowing */
+  .table-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
   table th, table td {
-    padding: 10px 12px;
+    padding: 10px 10px;
     font-size: 12px;
+    white-space: nowrap;
+  }
+
+  /* Allow name column to wrap */
+  .inventory-table td:nth-child(2),
+  .inventory-table th:nth-child(2) {
+    white-space: normal;
+    min-width: 120px;
   }
 
   /* Reports Tab Mobile Styling */
