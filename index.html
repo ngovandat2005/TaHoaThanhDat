@@ -683,6 +683,24 @@
     </div>
   </div>
 
+  <!-- HELD CARTS MODAL -->
+  <div id="hold-carts-modal" class="modal-backdrop no-print" style="display: none;">
+    <div class="modal modal-md">
+      <div class="modal-header">
+        <h3>Danh Sách Hóa Đơn Tạm Lưu</h3>
+        <button class="close-modal" id="btn-close-hold-modal">&times;</button>
+      </div>
+      <div class="modal-body" style="padding: 16px;">
+        <div id="hold-carts-list" class="hold-carts-list">
+          <!-- List of held carts will be rendered here dynamically -->
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" id="btn-close-hold-modal-footer">Đóng</button>
+      </div>
+    </div>
+  </div>
+
   <!-- PRINT INVOICE TEMPLATE (ONLY VISIBLE ON PRINT) -->
   <div class="print-invoice-wrapper" id="print-invoice-area">
     <!-- This structure is dynamic, generated on request by JS and printed using browser print dialog -->

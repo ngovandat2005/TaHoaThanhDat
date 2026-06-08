@@ -8,7 +8,7 @@ const state = {
   currentTab: 'pos-tab',
   products: [],
   cart: [],
-  holdCart: null, // Stores hold invoice
+  holdCarts: [], // Stores hold invoices
   storeSettings: {
     name: 'Tạp Hóa Thành Đạt',
     address: 'Số 123 Đường Lý Thường Kiệt, P. 1, TP. Vũng Tàu',
@@ -131,6 +131,12 @@ const el = {
   btnPrintInvoiceHistory: document.getElementById('btn-print-invoice-history'),
   btnCloseInvoiceModal: document.getElementById('btn-close-invoice-modal'),
   btnCloseInvoiceModalFooter: document.getElementById('btn-close-invoice-modal-footer'),
+
+  // Hold Carts Modal Elements
+  holdCartsModal: document.getElementById('hold-carts-modal'),
+  holdCartsList: document.getElementById('hold-carts-list'),
+  btnCloseHoldModal: document.getElementById('btn-close-hold-modal'),
+  btnCloseHoldModalFooter: document.getElementById('btn-close-hold-modal-footer'),
 
   // Warning Expiry Elements
   expiryWarningCount: document.getElementById('expiry-warning-count'),
@@ -892,6 +898,11 @@ function registerPOSEvents() {
   el.btnHoldCart.addEventListener('click', holdCurrentCart);
   el.btnRecallCart.addEventListener('click', recallHeldCart);
 
+  // Close Hold Carts Modal
+  const closeHoldModal = () => { el.holdCartsModal.style.display = 'none'; };
+  el.btnCloseHoldModal.addEventListener('click', closeHoldModal);
+  el.btnCloseHoldModalFooter.addEventListener('click', closeHoldModal);
+
   // Discount changes
   el.cartDiscountInput.addEventListener('input', calculateCartTotals);
   el.cartDiscountType.addEventListener('change', calculateCartTotals);
@@ -1233,34 +1244,154 @@ function holdCurrentCart() {
     return;
   }
 
-  state.holdCart = {
+  // Calculate total price for this held cart to display in the list
+  const subtotal = state.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  let discountVal = Number(el.cartDiscountInput.value.replace(/[^0-9]/g, '')) || 0;
+  const discountType = el.cartDiscountType.value;
+  let finalDiscount = 0;
+  if (discountType === '%') {
+    discountVal = Math.min(100, Math.max(0, discountVal));
+    finalDiscount = Math.round((subtotal * discountVal) / 100);
+  } else {
+    discountVal = Math.min(subtotal, Math.max(0, discountVal));
+    finalDiscount = discountVal;
+  }
+  const total = Math.max(0, subtotal - finalDiscount);
+
+  const newHold = {
+    id: Date.now(), // Unique ID based on timestamp
+    time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
     cart: [...state.cart],
-    customerPhone: el.cartCustomerPhone.value,
-    customerName: el.cartCustomerName.value,
+    customerPhone: el.cartCustomerPhone.value.trim(),
+    customerName: el.cartCustomerName.value.trim(),
     discountVal: el.cartDiscountInput.value,
-    discountType: el.cartDiscountType.value
+    discountType: el.cartDiscountType.value,
+    itemCount: state.cart.reduce((sum, item) => sum + item.quantity, 0),
+    totalPrice: total
   };
 
-  el.holdCount.textContent = '1';
+  state.holdCarts.push(newHold);
+
+  el.holdCount.textContent = state.holdCarts.length;
   el.btnRecallCart.style.display = 'inline-block';
   showToast('Đã lưu giỏ hàng nháp!', 'success');
   clearCart();
 }
 
 function recallHeldCart() {
-  if (!state.holdCart) return;
+  if (state.holdCarts.length === 0) return;
 
-  state.cart = state.holdCart.cart;
-  el.cartCustomerPhone.value = state.holdCart.customerPhone;
-  el.cartCustomerName.value = state.holdCart.customerName;
-  el.cartDiscountInput.value = state.holdCart.discountVal;
-  el.cartDiscountType.value = state.holdCart.discountType;
+  if (state.holdCarts.length === 1) {
+    // If only 1 cart, confirm override if current cart is not empty
+    if (state.cart.length > 0) {
+      if (!confirm('Giỏ hàng hiện tại đang có sản phẩm. Bạn có chắc chắn muốn ghi đè để khôi phục đơn hàng nháp này?')) {
+        return;
+      }
+    }
+    restoreHeldCart(0);
+  } else {
+    // If multiple carts, show modal list
+    renderHoldCartsList();
+    el.holdCartsModal.style.display = 'flex';
+  }
+}
 
-  state.holdCart = null;
-  el.btnRecallCart.style.display = 'none';
-  el.holdCount.textContent = '0';
+function renderHoldCartsList() {
+  if (state.holdCarts.length === 0) {
+    el.holdCartsList.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 20px 0;">Không có đơn hàng nháp nào đang lưu</div>`;
+    el.holdCartsModal.style.display = 'none';
+    el.btnRecallCart.style.display = 'none';
+    el.holdCount.textContent = '0';
+    return;
+  }
+
+  el.holdCartsList.innerHTML = state.holdCarts.map((item, index) => {
+    const customerDesc = item.customerName || item.customerPhone 
+      ? `${item.customerName || 'Khách lẻ'} (${item.customerPhone || 'Không SĐT'})` 
+      : 'Khách vãng lai';
+    return `
+      <div class="hold-cart-item">
+        <div class="hold-cart-info">
+          <div class="hold-cart-title">Đơn nháp #${index + 1} (${item.time})</div>
+          <div class="hold-cart-meta">
+            <span>
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px;"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+              ${customerDesc}
+            </span>
+            <span>
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px;"><path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+              ${item.itemCount} sp
+            </span>
+            <span>
+              <strong style="color: var(--primary-color);">${formatVND(item.totalPrice)}</strong>
+            </span>
+          </div>
+        </div>
+        <div class="hold-cart-actions">
+          <button class="btn btn-primary btn-xs btn-restore-hold" data-index="${index}">Chọn</button>
+          <button class="btn btn-danger btn-xs btn-delete-hold" data-index="${index}" style="padding: 4px 6px;">Xóa</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  // Attach event listeners
+  document.querySelectorAll('.btn-restore-hold').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = Number(btn.getAttribute('data-index'));
+      if (state.cart.length > 0) {
+        if (!confirm('Giỏ hàng hiện tại đang có sản phẩm. Bạn có chắc chắn muốn ghi đè để khôi phục đơn hàng nháp này?')) {
+          return;
+        }
+      }
+      restoreHeldCart(idx);
+      el.holdCartsModal.style.display = 'none';
+    });
+  });
+
+  document.querySelectorAll('.btn-delete-hold').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = Number(btn.getAttribute('data-index'));
+      if (confirm(`Bạn có chắc chắn muốn xóa đơn nháp #${idx + 1}?`)) {
+        deleteHeldCart(idx);
+      }
+    });
+  });
+}
+
+function restoreHeldCart(index) {
+  const held = state.holdCarts[index];
+  if (!held) return;
+
+  state.cart = [...held.cart];
+  el.cartCustomerPhone.value = held.customerPhone;
+  el.cartCustomerName.value = held.customerName;
+  el.cartDiscountInput.value = held.discountVal;
+  el.cartDiscountType.value = held.discountType;
+
+  // Remove from state.holdCarts
+  state.holdCarts.splice(index, 1);
+
+  // Update UI recall button & count
+  el.holdCount.textContent = state.holdCarts.length;
+  if (state.holdCarts.length === 0) {
+    el.btnRecallCart.style.display = 'none';
+  }
+
   showToast('Đã khôi phục giỏ hàng tạm!', 'success');
   renderCartTable();
+}
+
+function deleteHeldCart(index) {
+  state.holdCarts.splice(index, 1);
+  el.holdCount.textContent = state.holdCarts.length;
+  if (state.holdCarts.length === 0) {
+    el.btnRecallCart.style.display = 'none';
+    el.holdCartsModal.style.display = 'none';
+  } else {
+    renderHoldCartsList();
+  }
+  showToast('Đã xóa đơn hàng nháp.', 'info');
 }
 
 // VietQR code Generator
