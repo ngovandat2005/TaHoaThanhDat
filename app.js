@@ -1437,10 +1437,9 @@ let html5QrcodeScanner = null;
 function startCameraScanner() {
   el.cameraScannerModal.style.display = 'flex';
 
-  // Prefer native BarcodeDetector API (Chrome Android, iOS 16+)
-  if (typeof BarcodeDetector !== 'undefined') {
-    _startNativeScanner();
-  } else if (typeof Html5Qrcode !== 'undefined') {
+  // Force using the Html5Qrcode library instead of native BarcodeDetector
+  // for maximum compatibility and recognition rates of 1D barcodes on mobile devices
+  if (typeof Html5Qrcode !== 'undefined') {
     _startHtml5QrcodeScanner();
   } else {
     showToast('Trình duyệt không hỗ trợ quét camera. Hãy dùng Chrome hoặc Safari mới nhất.', 'danger');
