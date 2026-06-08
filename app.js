@@ -158,6 +158,13 @@ const el = {
   btnForceSync: document.getElementById('btn-force-sync'),
   cloudSyncStatus: document.getElementById('cloud-sync-status'),
 
+  // Mobile Invoice Modal
+  mobileInvoiceModal: document.getElementById('mobile-invoice-modal'),
+  mobileInvoiceContent: document.getElementById('mobile-invoice-content'),
+  btnCloseMobileInvoice: document.getElementById('btn-close-mobile-invoice'),
+  btnCloseMobileInvoiceBottom: document.getElementById('btn-close-mobile-invoice-bottom'),
+  btnMobilePrintInvoice: document.getElementById('btn-mobile-print-invoice'),
+
   // Print template area
   printInvoiceArea: document.getElementById('print-invoice-area'),
   toastContainer: document.getElementById('toast-container')
@@ -982,6 +989,18 @@ function registerPOSEvents() {
   // Checkout and Print
   el.btnCheckoutPrint.addEventListener('click', checkoutAndPrint);
 
+  // Mobile Invoice Modal: close buttons
+  const closeMobileInvoiceModal = () => {
+    el.mobileInvoiceModal.style.display = 'none';
+  };
+  el.btnCloseMobileInvoice.addEventListener('click', closeMobileInvoiceModal);
+  el.btnCloseMobileInvoiceBottom.addEventListener('click', closeMobileInvoiceModal);
+
+  // Mobile Invoice Modal: "In Hóa Đơn" for bluetooth printers
+  el.btnMobilePrintInvoice.addEventListener('click', () => {
+    window.print();
+  });
+
   // Barcode simulation
   el.btnScanSim.addEventListener('click', () => {
     const barcode = el.virtualBarcodeInput.value.trim();
@@ -1590,25 +1609,36 @@ async function checkoutAndPrint() {
     // 2. Render print receipt template HTML
     renderReceiptPrintTemplate(invoice);
 
-    // 3. Trigger Browser Print
-    // Give browser a short window to render images if printing (e.g. logo or fonts)
-    setTimeout(() => {
-      window.print();
-      
-      // Post-checkout: Clear cart and reload state
+    // 3. Post-checkout: Clear cart and reload state
+    const postCheckout = () => {
       clearCart();
       reloadProducts().then(() => {
         renderInventoryTable();
         refreshReports();
-        // Sync stocks of items in the checkout invoice to Firebase Cloud
+        // Sync updated stock to Firebase Cloud
         invoice.items.forEach(item => {
           const p = state.products.find(prod => prod.id === item.id);
           if (p) syncProductToCloud(p);
         });
       });
       showToast(`Thanh toán thành công hóa đơn ${invoiceId}!`, 'success');
-      el.posSearchInput.focus();
-    }, 150);
+    };
+
+    // 4. Detect mobile vs desktop to choose between modal preview vs print
+    const isMobile = window.innerWidth <= 768;
+    if (isMobile) {
+      // On mobile: show invoice in a readable modal instead of print dialog
+      el.mobileInvoiceContent.innerHTML = el.printInvoiceArea.innerHTML;
+      el.mobileInvoiceModal.style.display = 'flex';
+      postCheckout();
+    } else {
+      // On desktop: trigger print dialog as before
+      setTimeout(() => {
+        window.print();
+        postCheckout();
+        el.posSearchInput.focus();
+      }, 150);
+    }
 
   } catch (error) {
     console.error(error);
