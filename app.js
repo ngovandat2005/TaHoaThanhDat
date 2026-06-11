@@ -125,6 +125,18 @@ const el = {
   btnGenBarcode: document.getElementById('btn-gen-barcode'),
   btnCloseProductModal: document.getElementById('btn-close-product-modal'),
   btnCancelProductModal: document.getElementById('btn-cancel-product-modal'),
+  prodHasConversion: document.getElementById('prod-has-conversion'),
+  conversionFieldsSection: document.getElementById('conversion-fields-section'),
+  prodConversionUnit: document.getElementById('prod-conversion-unit'),
+  prodConversionQuantity: document.getElementById('prod-conversion-quantity'),
+  prodConversionBarcode: document.getElementById('prod-conversion-barcode'),
+  prodConversionImportPrice: document.getElementById('prod-conversion-import-price'),
+  prodConversionPrice: document.getElementById('prod-conversion-price'),
+  unitSelectorModal: document.getElementById('unit-selector-modal'),
+  btnCloseUnitSelector: document.getElementById('btn-close-unit-selector'),
+  unitSelectorProductName: document.getElementById('unit-selector-product-name'),
+  btnSelectBaseUnit: document.getElementById('btn-select-base-unit'),
+  btnSelectConversionUnit: document.getElementById('btn-select-conversion-unit'),
 
   invoiceDetailModal: document.getElementById('invoice-detail-modal'),
   invoiceModalContent: document.getElementById('invoice-modal-content'),
@@ -213,9 +225,12 @@ function startClock() {
   const updateTime = () => {
     const now = new Date();
     el.headerTime.textContent = now.toLocaleTimeString('vi-VN');
-    el.headerDate.textContent = now.toLocaleDateString('vi-VN', {
-      weekday: 'long', year: 'numeric', month: '2-digit', day: '2-digit'
-    });
+    const daysOfWeek = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
+    const weekday = daysOfWeek[now.getDay()];
+    const day = String(now.getDate()).padStart(2, '0');
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const year = now.getFullYear();
+    el.headerDate.textContent = `${weekday}, ngày ${day}/${month}/${year}`;
   };
   updateTime();
   setInterval(updateTime, 1000);
@@ -501,6 +516,49 @@ async function forceSyncAllToCloud() {
 }
 
 // --- UTILITIES ---
+function formatProductStock(prod) {
+  if (!prod) return '0';
+  if (prod.hasConversion && prod.conversionQuantity > 1) {
+    const qty = Number(prod.stock) || 0;
+    const rate = Number(prod.conversionQuantity);
+    const packs = Math.floor(qty / rate);
+    const cans = qty % rate;
+    
+    let display = '';
+    if (packs > 0) {
+      display += `${packs} ${prod.conversionUnit}`;
+    }
+    if (cans > 0) {
+      if (display) display += ' ';
+      display += `${cans} ${prod.unit}`;
+    }
+    return display || `0 ${prod.unit}`;
+  }
+  return `${prod.stock || 0} ${prod.unit || 'Cái'}`;
+}
+function formatDateDMY(dateInput) {
+  if (!dateInput) return '---';
+  const date = new Date(dateInput);
+  if (isNaN(date.getTime())) return '---';
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+  return `${day}/${month}/${year}`;
+}
+
+function formatDateTimeDMY(dateInput) {
+  if (!dateInput) return '---';
+  const date = new Date(dateInput);
+  if (isNaN(date.getTime())) return '---';
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const seconds = String(date.getSeconds()).padStart(2, '0');
+  return `${hours}:${minutes}:${seconds} ${day}/${month}/${year}`;
+}
+
 function formatVND(amount) {
   return Number(amount).toLocaleString('vi-VN') + ' đ';
 }
@@ -665,7 +723,7 @@ function renderInventoryTable() {
       today.setHours(0,0,0,0);
       const exp = new Date(p.expiryDate);
       const diffDays = Math.ceil((exp - today) / (1000 * 60 * 60 * 24));
-      const formattedExp = exp.toLocaleDateString('vi-VN');
+      const formattedExp = formatDateDMY(exp);
       
       if (diffDays <= 0) {
         expiryText = `${formattedExp} (Quá Hạn)`;
@@ -689,7 +747,7 @@ function renderInventoryTable() {
         <td class="text-right" style="color: var(--primary-color); font-weight: 700;">${formatVND(p.price)}</td>
         <td class="${expiryClass}" style="font-weight: 600;">${expiryText}</td>
         <td class="text-right">
-          <span class="stock-indicator ${stockClass}">${p.stock}</span>
+          <span class="stock-indicator ${stockClass}">${formatProductStock(p)}</span>
         </td>
         <td class="text-center">
           <div class="action-buttons-cell">
@@ -718,6 +776,11 @@ function registerInventoryEvents() {
   el.btnCloseProductModal.addEventListener('click', closeProductModal);
   el.btnCancelProductModal.addEventListener('click', closeProductModal);
 
+  // Toggle conversion section based on checkbox
+  el.prodHasConversion.addEventListener('change', () => {
+    el.conversionFieldsSection.style.display = el.prodHasConversion.checked ? 'block' : 'none';
+  });
+
   // Auto Generate Barcode in form
   el.btnGenBarcode.addEventListener('click', () => {
     // Generate code standard: 200 + 10 random digits (internal store bar)
@@ -742,16 +805,42 @@ function registerInventoryEvents() {
     const price = Number(el.prodPrice.value) || 0;
     const expiryDate = el.prodExpiry.value;
 
+    const hasConversion = el.prodHasConversion.checked;
+    const conversionUnit = el.prodConversionUnit.value.trim();
+    const conversionQuantity = Number(el.prodConversionQuantity.value) || 1;
+    const conversionBarcode = el.prodConversionBarcode.value.trim();
+    const conversionImportPrice = Number(el.prodConversionImportPrice.value) || 0;
+    const conversionPrice = Number(el.prodConversionPrice.value) || 0;
+
     if (!name || price <= 0) {
       showToast('Vui lòng nhập đầy đủ thông tin!', 'warning');
       return;
     }
 
-    // Check barcode duplicates
+    if (hasConversion) {
+      if (!conversionUnit || conversionQuantity <= 1 || conversionPrice <= 0) {
+        showToast('Vui lòng điền đầy đủ thông tin quy đổi (Đơn vị, số lượng > 1, giá bán > 0)!', 'warning');
+        return;
+      }
+    }
+
+    // Check barcode duplicates in state.products
     if (barcode) {
-      const match = await window.dbHelper.getProductByBarcode(barcode);
-      if (match && (!id || match.id !== Number(id))) {
-        showToast('Mã vạch này đã được sử dụng cho sản phẩm khác!', 'danger');
+      const match = state.products.find(p => (p.barcode === barcode || (p.hasConversion && p.conversionBarcode === barcode)) && (!id || p.id !== Number(id)));
+      if (match) {
+        showToast('Mã vạch chính này đã được sử dụng cho sản phẩm khác!', 'danger');
+        return;
+      }
+    }
+
+    if (hasConversion && conversionBarcode) {
+      if (barcode && barcode === conversionBarcode) {
+        showToast('Mã vạch đơn vị lẻ và mã vạch quy đổi không được trùng nhau!', 'danger');
+        return;
+      }
+      const match = state.products.find(p => (p.barcode === conversionBarcode || (p.hasConversion && p.conversionBarcode === conversionBarcode)) && (!id || p.id !== Number(id)));
+      if (match) {
+        showToast('Mã vạch quy đổi này đã được sử dụng cho sản phẩm khác!', 'danger');
         return;
       }
     }
@@ -763,7 +852,22 @@ function registerInventoryEvents() {
       return;
     }
 
-    const prodData = { name, barcode, category, unit, stock, importPrice, price, expiryDate };
+    const prodData = {
+      name,
+      barcode,
+      category,
+      unit,
+      stock,
+      importPrice,
+      price,
+      expiryDate,
+      hasConversion,
+      conversionUnit,
+      conversionQuantity,
+      conversionBarcode,
+      conversionImportPrice,
+      conversionPrice
+    };
     
     try {
       if (id) {
@@ -847,6 +951,15 @@ async function openProductModal(id = null) {
   el.productForm.reset();
   el.prodId.value = '';
   
+  // Reset conversion fields
+  el.prodHasConversion.checked = false;
+  el.conversionFieldsSection.style.display = 'none';
+  el.prodConversionUnit.value = '';
+  el.prodConversionQuantity.value = '6';
+  el.prodConversionBarcode.value = '';
+  el.prodConversionImportPrice.value = '0';
+  el.prodConversionPrice.value = '0';
+
   if (id) {
     el.modalProductTitle.textContent = 'Chỉnh Sửa Sản Phẩm';
     const prod = await window.dbHelper.getProductById(id);
@@ -860,6 +973,15 @@ async function openProductModal(id = null) {
       el.prodImportPrice.value = prod.importPrice || 0;
       el.prodPrice.value = prod.price || 0;
       el.prodExpiry.value = prod.expiryDate || '';
+      
+      // Populate conversion fields
+      el.prodHasConversion.checked = !!prod.hasConversion;
+      el.conversionFieldsSection.style.display = prod.hasConversion ? 'block' : 'none';
+      el.prodConversionUnit.value = prod.conversionUnit || '';
+      el.prodConversionQuantity.value = prod.conversionQuantity || '6';
+      el.prodConversionBarcode.value = prod.conversionBarcode || '';
+      el.prodConversionImportPrice.value = prod.conversionImportPrice || '0';
+      el.prodConversionPrice.value = prod.conversionPrice || '0';
     }
   } else {
     el.modalProductTitle.textContent = 'Thêm Sản Phẩm Mới';
@@ -889,7 +1011,7 @@ function renderPOSProducts() {
   const selectedCat = state.selectedCategory;
   
   const filtered = state.products.filter(p => {
-    const matchesQuery = p.name.toLowerCase().includes(query) || (p.barcode && p.barcode.includes(query));
+    const matchesQuery = p.name.toLowerCase().includes(query) || (p.barcode && p.barcode.includes(query)) || (p.hasConversion && p.conversionBarcode && p.conversionBarcode.includes(query));
     const matchesCategory = selectedCat === 'ALL' || p.category === selectedCat;
     return matchesQuery && matchesCategory;
   });
@@ -921,16 +1043,26 @@ function renderPOSProducts() {
       }
     }
 
+    let priceHtml = `<span class="price">${formatVND(p.price)}</span>`;
+    if (p.hasConversion) {
+      priceHtml = `
+        <div style="display: flex; flex-direction: column; gap: 2px;">
+          <span class="price" style="font-size: 12px; font-weight: 700;">${formatVND(p.price)} / ${p.unit}</span>
+          <span class="price" style="font-size: 11.5px; color: var(--primary-color); font-weight: 700;">${formatVND(p.conversionPrice)} / ${p.conversionUnit}</span>
+        </div>
+      `;
+    }
+
     return `
       <div class="product-card" data-id="${p.id}">
         <div class="product-card-info">
           <h4>${p.name}</h4>
-          <span class="barcode">${p.barcode || 'Không mã'}</span>
+          <span class="barcode">${p.barcode || 'Không mã'}${p.hasConversion && p.conversionBarcode ? ' / ' + p.conversionBarcode : ''}</span>
         </div>
         <div class="product-card-bottom" style="flex-wrap: wrap;">
-          <span class="price">${formatVND(p.price)}</span>
+          ${priceHtml}
           <div style="display: flex; flex-direction: column; align-items: flex-end;">
-            <span class="stock ${isOut ? 'out-of-stock' : ''}">${isOut ? 'Hết' : 'Kho: ' + p.stock}</span>
+            <span class="stock ${isOut ? 'out-of-stock' : ''}">${isOut ? 'Hết' : 'Kho: ' + formatProductStock(p)}</span>
             ${expiryHtml}
           </div>
         </div>
@@ -941,10 +1073,57 @@ function renderPOSProducts() {
   // Add click to add to cart
   document.querySelectorAll('.product-card').forEach(card => {
     card.addEventListener('click', () => {
-      const id = card.getAttribute('data-id');
-      addToCart(id);
+      const id = Number(card.getAttribute('data-id'));
+      const p = state.products.find(prod => prod.id === id);
+      if (!p) return;
+      if (p.hasConversion) {
+        openUnitSelectorModal(p);
+      } else {
+        addToCart(id, false);
+      }
     });
   });
+}
+
+function openUnitSelectorModal(prod) {
+  el.unitSelectorProductName.textContent = prod.name;
+  
+  // Base unit button details
+  const btnBase = el.btnSelectBaseUnit;
+  btnBase.querySelector('.unit-name').textContent = prod.unit || 'Lon';
+  btnBase.querySelector('.unit-price').textContent = formatVND(prod.price);
+  
+  // Conversion unit button details
+  const btnConv = el.btnSelectConversionUnit;
+  btnConv.querySelector('.unit-name').textContent = prod.conversionUnit || 'Lốc';
+  btnConv.querySelector('.unit-price').textContent = formatVND(prod.conversionPrice);
+  
+  // Recreate buttons to drop any old event listeners cleanly
+  const newBase = btnBase.cloneNode(true);
+  const newConv = btnConv.cloneNode(true);
+  btnBase.parentNode.replaceChild(newBase, btnBase);
+  btnConv.parentNode.replaceChild(newConv, btnConv);
+  
+  el.btnSelectBaseUnit = newBase;
+  el.btnSelectConversionUnit = newConv;
+  
+  // Bind clicks to add item with unit type
+  el.btnSelectBaseUnit.addEventListener('click', () => {
+    addToCart(prod.id, false);
+    el.unitSelectorModal.style.display = 'none';
+  });
+  
+  el.btnSelectConversionUnit.addEventListener('click', () => {
+    addToCart(prod.id, true);
+    el.unitSelectorModal.style.display = 'none';
+  });
+  
+  // Bind close event to modal close button
+  el.btnCloseUnitSelector.onclick = () => {
+    el.unitSelectorModal.style.display = 'none';
+  };
+  
+  el.unitSelectorModal.style.display = 'flex';
 }
 
 function registerPOSEvents() {
@@ -959,9 +1138,10 @@ function registerPOSEvents() {
     
     // Check if the query is an EXACT barcode match
     if (query.length >= 4) {
-      const matched = state.products.find(p => p.barcode === query);
+      const matched = state.products.find(p => p.barcode === query || (p.hasConversion && p.conversionBarcode === query));
       if (matched) {
-        addToCart(matched.id);
+        const useConversion = matched.hasConversion && matched.conversionBarcode === query;
+        addToCart(matched.id, useConversion);
         el.posSearchInput.value = '';
         el.clearSearchBtn.style.display = 'none';
       }
@@ -1148,10 +1328,12 @@ function registerBarcodeScannerListener() {
 }
 
 async function handleBarcodeScan(barcode) {
-  const prod = await window.dbHelper.getProductByBarcode(barcode);
+  const cleanBarcode = barcode.trim();
+  const prod = state.products.find(p => p.barcode === cleanBarcode || (p.hasConversion && p.conversionBarcode === cleanBarcode));
   if (prod) {
-    addToCart(prod.id);
-    showToast(`Đã quét: ${prod.name}`, 'success');
+    const useConversion = prod.hasConversion && prod.conversionBarcode === cleanBarcode;
+    addToCart(prod.id, useConversion);
+    showToast(`Đã quét: ${prod.name} (${useConversion ? prod.conversionUnit : prod.unit})`, 'success');
   } else {
     showToast(`Không tìm thấy mã vạch: ${barcode}`, 'warning');
     // Offer to add new product
@@ -1164,30 +1346,44 @@ async function handleBarcodeScan(barcode) {
 }
 
 // Cart Mechanics
-function addToCart(productId) {
+function addToCart(productId, useConversion = false) {
   const prod = state.products.find(p => p.id === Number(productId));
   if (!prod) return;
+
+  const barcode = useConversion ? prod.conversionBarcode : prod.barcode;
+  const price = useConversion ? prod.conversionPrice : prod.price;
+  const importPrice = useConversion ? prod.conversionImportPrice : prod.importPrice;
+  const unit = useConversion ? prod.conversionUnit : prod.unit;
+  const conversionRate = useConversion ? prod.conversionQuantity : 1;
+  const itemName = useConversion ? `${prod.name} (${prod.conversionUnit})` : prod.name;
+
+  // Calculate existing quantity in base units in the cart
+  const totalInBaseInCart = state.cart
+    .filter(item => item.id === prod.id)
+    .reduce((sum, item) => sum + (item.quantity * (item.conversionRate || 1)), 0);
 
   // Verify stock levels
   if (prod.stock <= 0) {
     showToast(`Sản phẩm "${prod.name}" đã hết hàng trong kho!`, 'warning');
+  } else if (totalInBaseInCart + conversionRate > prod.stock) {
+    showToast(`Chú ý: Tổng giỏ hàng vượt quá tồn kho (${formatProductStock(prod)})!`, 'warning');
   }
 
-  const existing = state.cart.find(item => item.id === prod.id);
+  // Find if this unit is already in the cart
+  const existing = state.cart.find(item => item.id === prod.id && item.unit === unit);
   if (existing) {
     existing.quantity += 1;
-    if (existing.quantity > prod.stock) {
-      showToast(`Chú ý: Số lượng bán (${existing.quantity}) vượt quá tồn kho (${prod.stock})!`, 'warning');
-    }
   } else {
     state.cart.push({
       id: prod.id,
-      name: prod.name,
-      barcode: prod.barcode,
-      price: prod.price,
-      importPrice: prod.importPrice,
-      unit: prod.unit,
-      quantity: 1
+      name: itemName,
+      barcode: barcode,
+      price: price,
+      importPrice: importPrice,
+      unit: unit,
+      quantity: 1,
+      isConversion: useConversion,
+      conversionRate: conversionRate
     });
   }
 
@@ -1253,8 +1449,13 @@ function renderCartTable() {
       const idx = Number(btn.getAttribute('data-index'));
       const prod = state.products.find(p => p.id === state.cart[idx].id);
       state.cart[idx].quantity += 1;
-      if (prod && state.cart[idx].quantity > prod.stock) {
-        showToast(`Cảnh báo: Kho chỉ còn ${prod.stock}!`, 'warning');
+      if (prod) {
+        const totalInBase = state.cart
+          .filter(item => item.id === prod.id)
+          .reduce((sum, item) => sum + (item.quantity * (item.conversionRate || 1)), 0);
+        if (totalInBase > prod.stock) {
+          showToast(`Cảnh báo: Tổng giỏ hàng vượt quá tồn kho (${formatProductStock(prod)})!`, 'warning');
+        }
       }
       renderCartTable();
     });
@@ -1267,8 +1468,13 @@ function renderCartTable() {
       state.cart[idx].quantity = Math.max(1, val);
       
       const prod = state.products.find(p => p.id === state.cart[idx].id);
-      if (prod && state.cart[idx].quantity > prod.stock) {
-        showToast(`Cảnh báo: Kho chỉ còn ${prod.stock}!`, 'warning');
+      if (prod) {
+        const totalInBase = state.cart
+          .filter(item => item.id === prod.id)
+          .reduce((sum, item) => sum + (item.quantity * (item.conversionRate || 1)), 0);
+        if (totalInBase > prod.stock) {
+          showToast(`Cảnh báo: Tổng giỏ hàng vượt quá tồn kho (${formatProductStock(prod)})!`, 'warning');
+        }
       }
       renderCartTable();
     });
@@ -1828,7 +2034,7 @@ function renderReceiptPrintTemplate(invoice) {
   `).join('');
 
   const pSize = state.storeSettings.printerSize;
-  const formattedDate = new Date(invoice.createdAt).toLocaleString('vi-VN');
+  const formattedDate = formatDateTimeDMY(invoice.createdAt);
 
   el.printInvoiceArea.innerHTML = `
     <div class="print-receipt ${pSize === '58' ? 'paper-58' : ''}">
@@ -1973,8 +2179,8 @@ function renderExpiryWarningTable() {
         <td><strong>${p.name}</strong></td>
         <td><code>${p.barcode || '---'}</code></td>
         <td>${p.category || 'Khác'}</td>
-        <td class="text-right">${p.stock}</td>
-        <td>${exp.toLocaleDateString('vi-VN')}</td>
+        <td class="text-right">${formatProductStock(p)}</td>
+        <td>${formatDateDMY(exp)}</td>
         <td>${statusBadge}</td>
       </tr>
     `;
@@ -1996,7 +2202,7 @@ function renderHistoryTable(invoices) {
 
   el.historyTbody.innerHTML = filtered.map(inv => {
     const date = new Date(inv.createdAt);
-    const timeFormatted = `${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')} - ${date.toLocaleDateString('vi-VN')}`;
+    const timeFormatted = `${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')} - ${formatDateDMY(date)}`;
     const methodText = inv.paymentMethod === 'CASH' ? 'Tiền mặt' : 'Ck QR';
     const isVoided = inv.voided === true;
     
@@ -2074,7 +2280,7 @@ async function showInvoiceDetails(invoiceId) {
   el.invoiceModalContent.innerHTML = `
     <div style="border-bottom: 1px dashed var(--border-color); padding-bottom: 12px; margin-bottom: 12px;">
       <h4 style="margin-bottom: 4px;">Mã Đơn: ${inv.id}</h4>
-      <p style="font-size: 12px; color: var(--text-muted);">Thời gian: ${new Date(inv.createdAt).toLocaleString('vi-VN')}</p>
+      <p style="font-size: 12px; color: var(--text-muted);">Thời gian: ${formatDateTimeDMY(inv.createdAt)}</p>
       <p style="font-size: 12px; color: var(--text-muted);">Khách hàng: ${inv.customerName} ${inv.customerPhone ? '('+inv.customerPhone+')' : ''}</p>
     </div>
     <div style="margin-bottom: 12px; border-bottom: 1px dashed var(--border-color); padding-bottom: 12px;">

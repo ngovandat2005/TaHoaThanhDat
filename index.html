@@ -657,11 +657,71 @@
             </div>
           </div>
 
+          <!-- Checkbox toggle for conversion unit -->
+          <div class="form-group" style="margin-top: 15px; margin-bottom: 10px;">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600;">
+              <input type="checkbox" id="prod-has-conversion" style="width: 16px; height: 16px;">
+              <span style="color: var(--primary-color);">Khai báo đơn vị quy đổi (Lốc, Thùng, Hộp...)</span>
+            </label>
+          </div>
+
+          <!-- Hidden conversion fields panel -->
+          <div id="conversion-fields-section" style="display: none; background: rgba(16, 185, 129, 0.04); border: 1px dashed var(--primary-color); border-radius: 6px; padding: 12px; margin-bottom: 15px;">
+            <h4 style="margin-top: 0; margin-bottom: 10px; color: var(--primary-color); font-size: 13.5px; font-weight: 700;">Cấu hình đơn vị quy đổi</h4>
+            <div class="form-grid">
+              <div class="form-group">
+                <label for="prod-conversion-unit">Đơn vị quy đổi:</label>
+                <input type="text" id="prod-conversion-unit" placeholder="Ví dụ: Lốc, Thùng...">
+              </div>
+              <div class="form-group">
+                <label for="prod-conversion-quantity">Số lượng quy đổi (số lon lẻ trong 1 lốc/thùng):</label>
+                <input type="number" id="prod-conversion-quantity" value="1" min="1">
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="prod-conversion-barcode">Mã vạch đơn vị quy đổi (nếu có):</label>
+              <input type="text" id="prod-conversion-barcode" placeholder="Mã vạch riêng của Lốc/Thùng...">
+            </div>
+            <div class="form-grid">
+              <div class="form-group">
+                <label for="prod-conversion-import-price">Giá nhập quy đổi (đ):</label>
+                <input type="number" id="prod-conversion-import-price" value="0" min="0">
+              </div>
+              <div class="form-group">
+                <label for="prod-conversion-price">Giá bán quy đổi (đ):</label>
+                <input type="number" id="prod-conversion-price" value="0" min="0">
+              </div>
+            </div>
+          </div>
+
           <div class="modal-footer">
             <button type="button" class="btn btn-outline" id="btn-cancel-product-modal">Hủy bỏ</button>
             <button type="submit" class="btn btn-primary" id="btn-save-product">Lưu lại</button>
           </div>
         </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- UNIT SELECTOR MODAL (Quick Unit Choice for POS) -->
+  <div id="unit-selector-modal" class="modal-backdrop no-print" style="display: none; z-index: 1100;">
+    <div class="modal modal-sm" style="max-width: 380px;">
+      <div class="modal-header">
+        <h3>Chọn đơn vị bán</h3>
+        <button class="close-modal" id="btn-close-unit-selector">&times;</button>
+      </div>
+      <div class="modal-body" style="padding: 16px; text-align: center;">
+        <h4 id="unit-selector-product-name" style="margin-bottom: 15px; color: var(--text-color); font-weight: 700; font-size: 16px;">Sản phẩm</h4>
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <button id="btn-select-base-unit" class="btn btn-outline btn-block" style="padding: 12px; font-size: 14.5px; text-align: left; display: flex; justify-content: space-between; align-items: center; border-color: var(--primary-color);">
+            <span>Bán lẻ (<span class="unit-name" style="font-weight: 600;">Lon</span>)</span>
+            <strong class="unit-price" style="color: var(--primary-color);">10,500 đ</strong>
+          </button>
+          <button id="btn-select-conversion-unit" class="btn btn-primary btn-block" style="padding: 12px; font-size: 14.5px; text-align: left; display: flex; justify-content: space-between; align-items: center;">
+            <span>Bán sỉ (<span class="unit-name" style="font-weight: 600;">Lốc</span>)</span>
+            <strong class="unit-price">60,000 đ</strong>
+          </button>
+        </div>
       </div>
     </div>
   </div>

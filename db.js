@@ -106,6 +106,12 @@ class ThanhDatDB {
         unit: product.unit || 'Cái',
         category: product.category || 'Khác',
         expiryDate: product.expiryDate || '',
+        hasConversion: !!product.hasConversion,
+        conversionUnit: product.conversionUnit || '',
+        conversionQuantity: Number(product.conversionQuantity) || 1,
+        conversionBarcode: (product.conversionBarcode || '').trim(),
+        conversionImportPrice: Number(product.conversionImportPrice) || 0,
+        conversionPrice: Number(product.conversionPrice) || 0,
         createdAt: new Date().toISOString()
       };
 
@@ -131,6 +137,12 @@ class ThanhDatDB {
         unit: product.unit || 'Cái',
         category: product.category || 'Khác',
         expiryDate: product.expiryDate || '',
+        hasConversion: !!product.hasConversion,
+        conversionUnit: product.conversionUnit || '',
+        conversionQuantity: Number(product.conversionQuantity) || 1,
+        conversionBarcode: (product.conversionBarcode || '').trim(),
+        conversionImportPrice: Number(product.conversionImportPrice) || 0,
+        conversionPrice: Number(product.conversionPrice) || 0,
         createdAt: product.createdAt || new Date().toISOString()
       };
 
@@ -192,12 +204,13 @@ class ThanhDatDB {
         return new Promise((resUpdate, rejUpdate) => {
           if (!item.id) return resUpdate(); // skip if no product ID
           
-          const getReq = productStore.get(Number(item.id));
-          getReq.onsuccess = () => {
-            const product = getReq.result;
-            if (product) {
-              product.stock = Math.max(0, (product.stock || 0) - item.quantity);
-              const putReq = productStore.put(product);
+            const getReq = productStore.get(Number(item.id));
+            getReq.onsuccess = () => {
+              const product = getReq.result;
+              if (product) {
+                const qtyDeducted = Number(item.quantity) * (Number(item.conversionRate) || 1);
+                product.stock = Math.max(0, (product.stock || 0) - qtyDeducted);
+                const putReq = productStore.put(product);
               putReq.onsuccess = () => resUpdate();
               putReq.onerror = () => rejUpdate(putReq.error);
             } else {
@@ -270,7 +283,8 @@ class ThanhDatDB {
             getProdReq.onsuccess = () => {
               const product = getProdReq.result;
               if (product) {
-                product.stock = (product.stock || 0) + item.quantity;
+                const qtyRestored = Number(item.quantity) * (Number(item.conversionRate) || 1);
+                product.stock = (product.stock || 0) + qtyRestored;
                 productStore.put(product);
               }
               pending--;
