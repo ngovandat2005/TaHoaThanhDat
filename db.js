@@ -6,7 +6,7 @@
 class ThanhDatDB {
   constructor() {
     this.dbName = 'ThanhDatPOS_DB';
-    this.dbVersion = 1;
+    this.dbVersion = 2;
     this.db = null;
   }
 
@@ -49,6 +49,13 @@ class ThanhDatDB {
         // 3. Settings store
         if (!db.objectStoreNames.contains('settings')) {
           db.createObjectStore('settings', { keyPath: 'key' });
+        }
+
+        // 4. Stock logs store
+        if (!db.objectStoreNames.contains('stockLogs')) {
+          const stockLogStore = db.createObjectStore('stockLogs', { keyPath: 'id', autoIncrement: true });
+          stockLogStore.createIndex('productId', 'productId', { unique: false });
+          stockLogStore.createIndex('createdAt', 'createdAt', { unique: false });
         }
       };
     });
@@ -195,23 +202,48 @@ class ThanhDatDB {
 
   addInvoice(invoice) {
     return new Promise((resolve, reject) => {
-      const transaction = this.db.transaction(['invoices', 'products'], 'readwrite');
+      const stores = ['invoices', 'products'];
+      const hasLogs = this.db.objectStoreNames.contains('stockLogs');
+      if (hasLogs) {
+        stores.push('stockLogs');
+      }
+
+      const transaction = this.db.transaction(stores, 'readwrite');
       const invoiceStore = transaction.objectStore('invoices');
       const productStore = transaction.objectStore('products');
+      const logStore = hasLogs ? transaction.objectStore('stockLogs') : null;
 
       // 1. Deduct stock for each item in the invoice
       const updateStockPromises = invoice.items.map(item => {
         return new Promise((resUpdate, rejUpdate) => {
           if (!item.id) return resUpdate(); // skip if no product ID
           
-            const getReq = productStore.get(Number(item.id));
-            getReq.onsuccess = () => {
-              const product = getReq.result;
-              if (product) {
-                const qtyDeducted = Number(item.quantity) * (Number(item.conversionRate) || 1);
-                product.stock = Math.max(0, (product.stock || 0) - qtyDeducted);
-                const putReq = productStore.put(product);
-              putReq.onsuccess = () => resUpdate();
+          const getReq = productStore.get(Number(item.id));
+          getReq.onsuccess = () => {
+            const product = getReq.result;
+            if (product) {
+              const qtyDeducted = Number(item.quantity) * (Number(item.conversionRate) || 1);
+              const beforeQty = Number(product.stock) || 0;
+              product.stock = Math.max(0, beforeQty - qtyDeducted);
+              const afterQty = product.stock;
+              
+              const putReq = productStore.put(product);
+              putReq.onsuccess = () => {
+                if (logStore) {
+                  logStore.add({
+                    productId: Number(item.id),
+                    productName: product.name,
+                    barcode: item.barcode || product.barcode || '',
+                    changeQuantity: -qtyDeducted,
+                    beforeQuantity: beforeQty,
+                    afterQuantity: afterQty,
+                    reason: 'SALE',
+                    notes: `Bán hàng - Đơn ${invoice.id.substring(invoice.id.lastIndexOf('-') + 1)}`,
+                    createdAt: invoice.createdAt || new Date().toISOString()
+                  });
+                }
+                resUpdate();
+              };
               putReq.onerror = () => rejUpdate(putReq.error);
             } else {
               resUpdate();
@@ -254,10 +286,16 @@ class ThanhDatDB {
   voidInvoice(invoiceId) {
     return new Promise(async (resolve, reject) => {
       try {
-        // 1. Get the invoice to restore stock
-        const transaction = this.db.transaction(['invoices', 'products'], 'readwrite');
+        const stores = ['invoices', 'products'];
+        const hasLogs = this.db.objectStoreNames.contains('stockLogs');
+        if (hasLogs) {
+          stores.push('stockLogs');
+        }
+
+        const transaction = this.db.transaction(stores, 'readwrite');
         const invoiceStore = transaction.objectStore('invoices');
         const productStore = transaction.objectStore('products');
+        const logStore = hasLogs ? transaction.objectStore('stockLogs') : null;
 
         const getInvReq = invoiceStore.get(invoiceId);
         getInvReq.onsuccess = () => {
@@ -284,8 +322,24 @@ class ThanhDatDB {
               const product = getProdReq.result;
               if (product) {
                 const qtyRestored = Number(item.quantity) * (Number(item.conversionRate) || 1);
-                product.stock = (product.stock || 0) + qtyRestored;
+                const beforeQty = Number(product.stock) || 0;
+                product.stock = beforeQty + qtyRestored;
+                const afterQty = product.stock;
                 productStore.put(product);
+                
+                if (logStore) {
+                  logStore.add({
+                    productId: Number(item.id),
+                    productName: product.name,
+                    barcode: item.barcode || product.barcode || '',
+                    changeQuantity: qtyRestored,
+                    beforeQuantity: beforeQty,
+                    afterQuantity: afterQty,
+                    reason: 'VOID',
+                    notes: `Hủy hóa đơn - Đơn ${invoiceId.substring(invoiceId.lastIndexOf('-') + 1)}`,
+                    createdAt: new Date().toISOString()
+                  });
+                }
               }
               pending--;
               if (pending === 0) {
@@ -302,6 +356,66 @@ class ThanhDatDB {
       } catch (err) {
         reject(err);
       }
+    });
+  }
+
+  // --- STOCK LOGS METHODS ---
+
+  addStockLog(log) {
+    return new Promise((resolve, reject) => {
+      if (!this.db || !this.db.objectStoreNames.contains('stockLogs')) {
+        return resolve(null);
+      }
+      const transaction = this.db.transaction(['stockLogs'], 'readwrite');
+      const store = transaction.objectStore('stockLogs');
+      
+      const cleanLog = {
+        productId: Number(log.productId),
+        productName: log.productName || '',
+        barcode: log.barcode || '',
+        changeQuantity: Number(log.changeQuantity) || 0,
+        beforeQuantity: Number(log.beforeQuantity) || 0,
+        afterQuantity: Number(log.afterQuantity) || 0,
+        reason: log.reason || 'ADJUST',
+        notes: log.notes || '',
+        createdAt: log.createdAt || new Date().toISOString()
+      };
+      
+      const request = store.add(cleanLog);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  getAllStockLogs() {
+    return new Promise((resolve, reject) => {
+      if (!this.db || !this.db.objectStoreNames.contains('stockLogs')) {
+        return resolve([]);
+      }
+      const transaction = this.db.transaction(['stockLogs'], 'readonly');
+      const store = transaction.objectStore('stockLogs');
+      const request = store.getAll();
+      
+      request.onsuccess = () => {
+        const results = request.result || [];
+        results.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        resolve(results);
+      };
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  clearAllStockLogs() {
+    return new Promise((resolve, reject) => {
+      if (!this.db || !this.db.objectStoreNames.contains('stockLogs')) {
+        return resolve(true);
+      }
+      const transaction = this.db.transaction(['stockLogs'], 'readwrite');
+      const store = transaction.objectStore('stockLogs');
+      const request = store.clear();
+      
+      request.onsuccess = () => resolve(true);
+      request.onerror = () => reject(request.error);
     });
   }
 

@@ -85,7 +85,6 @@ const el = {
 
   // Reports Tab
   reportTodayRevenue: document.getElementById('report-today-revenue'),
-  reportTodayProfit: document.getElementById('report-today-profit'),
   reportTodayInvoices: document.getElementById('report-today-invoices'),
   reportTotalProductsCount: document.getElementById('report-total-products-count'),
   reportHistoryDate: document.getElementById('report-history-date'),
@@ -119,7 +118,6 @@ const el = {
   prodCategory: document.getElementById('prod-category'),
   prodUnit: document.getElementById('prod-unit'),
   prodStock: document.getElementById('prod-stock'),
-  prodImportPrice: document.getElementById('prod-import-price'),
   prodPrice: document.getElementById('prod-price'),
   prodExpiry: document.getElementById('prod-expiry'),
   btnGenBarcode: document.getElementById('btn-gen-barcode'),
@@ -130,7 +128,6 @@ const el = {
   prodConversionUnit: document.getElementById('prod-conversion-unit'),
   prodConversionQuantity: document.getElementById('prod-conversion-quantity'),
   prodConversionBarcode: document.getElementById('prod-conversion-barcode'),
-  prodConversionImportPrice: document.getElementById('prod-conversion-import-price'),
   prodConversionPrice: document.getElementById('prod-conversion-price'),
   unitSelectorModal: document.getElementById('unit-selector-modal'),
   btnCloseUnitSelector: document.getElementById('btn-close-unit-selector'),
@@ -179,7 +176,16 @@ const el = {
 
   // Print template area
   printInvoiceArea: document.getElementById('print-invoice-area'),
-  toastContainer: document.getElementById('toast-container')
+  toastContainer: document.getElementById('toast-container'),
+  stockLogsTbody: document.getElementById('stock-logs-tbody'),
+  stockLogsCount: document.getElementById('stock-logs-count'),
+  btnKeyboardShortcuts: document.getElementById('btn-keyboard-shortcuts'),
+  shortcutsModal: document.getElementById('shortcuts-modal'),
+  btnCloseShortcuts: document.getElementById('btn-close-shortcuts'),
+  inventoryStatusFilter: document.getElementById('inventory-status-filter'),
+  btnExportCSV: document.getElementById('btn-export-csv'),
+  btnImportCSVTrigger: document.getElementById('btn-import-csv-trigger'),
+  inventoryImportCSV: document.getElementById('inventory-import-csv')
 };
 
 // Initialize App
@@ -613,6 +619,14 @@ function registerNavEvents() {
     await window.dbHelper.saveSetting('theme', state.theme);
     showToast(`Đã chuyển sang chế độ ${state.theme === 'dark' ? 'Tối' : 'Sáng'}`, 'info');
   });
+
+  el.btnKeyboardShortcuts.addEventListener('click', () => {
+    el.shortcutsModal.style.display = el.shortcutsModal.style.display === 'none' ? 'flex' : 'none';
+  });
+
+  el.btnCloseShortcuts.addEventListener('click', () => {
+    el.shortcutsModal.style.display = 'none';
+  });
 }
 
 function switchTab(tabId) {
@@ -697,11 +711,32 @@ function renderCategoryFilters() {
 function renderInventoryTable() {
   const query = el.inventorySearchInput.value.toLowerCase().trim();
   const categoryFilter = el.inventoryCategoryFilter.value;
+  const statusFilter = el.inventoryStatusFilter ? el.inventoryStatusFilter.value : 'ALL';
   
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const alertDays = Number(state.storeSettings.expiryAlertDays) || 30;
+
   const filtered = state.products.filter(p => {
     const matchesQuery = p.name.toLowerCase().includes(query) || (p.barcode && p.barcode.includes(query));
     const matchesCategory = categoryFilter === 'ALL' || p.category === categoryFilter;
-    return matchesQuery && matchesCategory;
+    
+    let matchesStatus = true;
+    if (statusFilter === 'OUT_OF_STOCK') {
+      matchesStatus = Number(p.stock) <= 0;
+    } else if (statusFilter === 'LOW_STOCK') {
+      matchesStatus = Number(p.stock) > 0 && Number(p.stock) <= 5;
+    } else if (statusFilter === 'NEAR_EXPIRY') {
+      if (!p.expiryDate) {
+        matchesStatus = false;
+      } else {
+        const exp = new Date(p.expiryDate);
+        const diffDays = Math.ceil((exp - today) / (1000 * 60 * 60 * 24));
+        matchesStatus = diffDays <= alertDays;
+      }
+    }
+
+    return matchesQuery && matchesCategory && matchesStatus;
   });
 
   if (filtered.length === 0) {
@@ -743,11 +778,13 @@ function renderInventoryTable() {
         <td><code style="font-size: 11px;">${p.barcode || '---'}</code></td>
         <td>${p.category || 'Khác'}</td>
         <td>${p.unit || 'Cái'}</td>
-        <td class="text-right">${formatVND(p.importPrice)}</td>
         <td class="text-right" style="color: var(--primary-color); font-weight: 700;">${formatVND(p.price)}</td>
         <td class="${expiryClass}" style="font-weight: 600;">${expiryText}</td>
         <td class="text-right">
-          <span class="stock-indicator ${stockClass}">${formatProductStock(p)}</span>
+          <div style="display: inline-flex; align-items: center; gap: 6px; justify-content: flex-end;">
+            <span class="stock-indicator ${stockClass}">${formatProductStock(p)}</span>
+            <button class="btn btn-secondary btn-xs btn-quick-stock" data-id="${p.id}" title="Nhập hàng bổ sung nhanh" style="padding: 2px 5px; font-size: 10px; font-weight: 700;">+</button>
+          </div>
         </td>
         <td class="text-center">
           <div class="action-buttons-cell">
@@ -766,11 +803,61 @@ function renderInventoryTable() {
   document.querySelectorAll('.btn-del-prod').forEach(btn => {
     btn.addEventListener('click', () => deleteProduct(btn.getAttribute('data-id')));
   });
+
+  // Bind quick stock replenish button
+  document.querySelectorAll('.btn-quick-stock').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const prodId = Number(btn.getAttribute('data-id'));
+      const p = state.products.find(prod => prod.id === prodId);
+      if (!p) return;
+      
+      const input = prompt(`Nhập số lượng hàng bổ sung nhanh cho: "${p.name}" (Đơn vị tính: ${p.unit}):`);
+      if (input === null) return;
+      
+      const num = parseInt(input);
+      if (isNaN(num) || num <= 0) {
+        showToast('Số lượng nhập phải là số nguyên dương!', 'warning');
+        return;
+      }
+      
+      const beforeQty = Number(p.stock) || 0;
+      const afterQty = beforeQty + num;
+      p.stock = afterQty;
+      
+      try {
+        if (window.dbHelper.addStockLog) {
+          await window.dbHelper.addStockLog({
+            productId: p.id,
+            productName: p.name,
+            barcode: p.barcode || '',
+            changeQuantity: num,
+            beforeQuantity: beforeQty,
+            afterQuantity: afterQty,
+            reason: 'IMPORT',
+            notes: 'Nhập hàng bổ sung nhanh'
+          });
+        }
+        await window.dbHelper.updateProduct(p);
+        await syncProductToCloud(p);
+        showToast(`Đã nhập thêm +${num} ${p.unit} vào tồn kho cho: ${p.name}`, 'success');
+        await reloadProducts();
+        renderInventoryTable();
+        refreshReports();
+      } catch (err) {
+        console.error(err);
+        showToast('Lỗi lưu tồn kho!', 'danger');
+      }
+    });
+  });
 }
 
 function registerInventoryEvents() {
   el.inventorySearchInput.addEventListener('input', renderInventoryTable);
   el.inventoryCategoryFilter.addEventListener('change', renderInventoryTable);
+  if (el.inventoryStatusFilter) {
+    el.inventoryStatusFilter.addEventListener('change', renderInventoryTable);
+  }
   
   el.btnOpenAddProduct.addEventListener('click', () => openProductModal());
   el.btnCloseProductModal.addEventListener('click', closeProductModal);
@@ -801,7 +888,7 @@ function registerInventoryEvents() {
     const category = el.prodCategory.value.trim() || 'Khác';
     const unit = el.prodUnit.value.trim() || 'Cái';
     const stock = Number(el.prodStock.value) || 0;
-    const importPrice = Number(el.prodImportPrice.value) || 0;
+    const importPrice = 0;
     const price = Number(el.prodPrice.value) || 0;
     const expiryDate = el.prodExpiry.value;
 
@@ -809,7 +896,7 @@ function registerInventoryEvents() {
     const conversionUnit = el.prodConversionUnit.value.trim();
     const conversionQuantity = Number(el.prodConversionQuantity.value) || 1;
     const conversionBarcode = el.prodConversionBarcode.value.trim();
-    const conversionImportPrice = Number(el.prodConversionImportPrice.value) || 0;
+    const conversionImportPrice = 0;
     const conversionPrice = Number(el.prodConversionPrice.value) || 0;
 
     if (!name || price <= 0) {
@@ -874,12 +961,46 @@ function registerInventoryEvents() {
         prodData.id = Number(id);
         const original = state.products.find(p => p.id === Number(id));
         prodData.createdAt = original ? original.createdAt : new Date().toISOString();
+        
+        // Log manual stock adjustment if changed
+        const oldStock = original ? Number(original.stock) : 0;
+        const newStock = Number(prodData.stock) || 0;
+        const diff = newStock - oldStock;
+        if (diff !== 0 && window.dbHelper.addStockLog) {
+          await window.dbHelper.addStockLog({
+            productId: prodData.id,
+            productName: prodData.name,
+            barcode: prodData.barcode || '',
+            changeQuantity: diff,
+            beforeQuantity: oldStock,
+            afterQuantity: newStock,
+            reason: 'ADJUST',
+            notes: 'Điều chỉnh tồn kho thủ công'
+          });
+        }
+
         await window.dbHelper.updateProduct(prodData);
         await syncProductToCloud(prodData); // Cloud sync
         showToast('Cập nhật sản phẩm thành công!', 'success');
       } else {
         const newId = await window.dbHelper.addProduct(prodData);
         prodData.id = newId;
+
+        // Log initial import if stock > 0
+        const initialStock = Number(prodData.stock) || 0;
+        if (initialStock > 0 && window.dbHelper.addStockLog) {
+          await window.dbHelper.addStockLog({
+            productId: newId,
+            productName: prodData.name,
+            barcode: prodData.barcode || '',
+            changeQuantity: initialStock,
+            beforeQuantity: 0,
+            afterQuantity: initialStock,
+            reason: 'IMPORT',
+            notes: 'Nhập hàng khởi tạo ban đầu'
+          });
+        }
+
         await syncProductToCloud(prodData); // Cloud sync
         showToast('Thêm sản phẩm mới thành công!', 'success');
       }
@@ -945,6 +1066,17 @@ function registerInventoryEvents() {
     };
     reader.readAsText(file);
   });
+
+  // Excel CSV Export
+  if (el.btnExportCSV) {
+    el.btnExportCSV.addEventListener('click', exportProductsToCSV);
+  }
+
+  // Excel CSV Import
+  if (el.btnImportCSVTrigger && el.inventoryImportCSV) {
+    el.btnImportCSVTrigger.addEventListener('click', () => el.inventoryImportCSV.click());
+    el.inventoryImportCSV.addEventListener('change', importProductsFromCSV);
+  }
 }
 
 async function openProductModal(id = null) {
@@ -957,7 +1089,6 @@ async function openProductModal(id = null) {
   el.prodConversionUnit.value = '';
   el.prodConversionQuantity.value = '6';
   el.prodConversionBarcode.value = '';
-  el.prodConversionImportPrice.value = '0';
   el.prodConversionPrice.value = '0';
 
   if (id) {
@@ -970,7 +1101,6 @@ async function openProductModal(id = null) {
       el.prodCategory.value = prod.category || 'Khác';
       el.prodUnit.value = prod.unit || 'Cái';
       el.prodStock.value = prod.stock || 0;
-      el.prodImportPrice.value = prod.importPrice || 0;
       el.prodPrice.value = prod.price || 0;
       el.prodExpiry.value = prod.expiryDate || '';
       
@@ -980,7 +1110,6 @@ async function openProductModal(id = null) {
       el.prodConversionUnit.value = prod.conversionUnit || '';
       el.prodConversionQuantity.value = prod.conversionQuantity || '6';
       el.prodConversionBarcode.value = prod.conversionBarcode || '';
-      el.prodConversionImportPrice.value = prod.conversionImportPrice || '0';
       el.prodConversionPrice.value = prod.conversionPrice || '0';
     }
   } else {
@@ -1295,6 +1424,15 @@ function registerGlobalKeyEvents() {
         checkoutAndPrint();
       }
     }
+    // Esc closes all modals
+    if (e.key === 'Escape') {
+      if (el.shortcutsModal) el.shortcutsModal.style.display = 'none';
+      if (el.productModal) el.productModal.style.display = 'none';
+      if (el.unitSelectorModal) el.unitSelectorModal.style.display = 'none';
+      if (el.invoiceDetailModal) el.invoiceDetailModal.style.display = 'none';
+      if (el.holdCartsModal) el.holdCartsModal.style.display = 'none';
+      if (typeof stopCameraScanner === 'function') stopCameraScanner();
+    }
   });
 }
 
@@ -1329,6 +1467,23 @@ function registerBarcodeScannerListener() {
 
 async function handleBarcodeScan(barcode) {
   const cleanBarcode = barcode.trim();
+  if (!cleanBarcode) return;
+
+  // Nếu đang mở modal thêm/sửa sản phẩm
+  if (el.productModal && el.productModal.style.display === 'flex') {
+    // Nếu checkbox "Khai báo đơn vị quy đổi" được chọn và không đang focus vào ô mã vạch chính
+    if (el.prodHasConversion && el.prodHasConversion.checked && document.activeElement !== el.prodBarcode) {
+      el.prodConversionBarcode.value = cleanBarcode;
+      el.prodConversionBarcode.focus();
+      showToast(`Đã điền mã vạch quy đổi: ${cleanBarcode}`, 'success');
+    } else {
+      el.prodBarcode.value = cleanBarcode;
+      el.prodBarcode.focus();
+      showToast(`Đã điền mã vạch sản phẩm: ${cleanBarcode}`, 'success');
+    }
+    return;
+  }
+
   const prod = state.products.find(p => p.barcode === cleanBarcode || (p.hasConversion && p.conversionBarcode === cleanBarcode));
   if (prod) {
     const useConversion = prod.hasConversion && prod.conversionBarcode === cleanBarcode;
@@ -2115,21 +2270,8 @@ async function refreshReports() {
   // 1. Calculate today revenue
   const todayRevenue = todayInvoices.reduce((sum, inv) => sum + inv.totalPrice, 0);
   
-  // 2. Calculate today estimated profits
-  let todayProfit = 0;
-  todayInvoices.forEach(inv => {
-    inv.items.forEach(item => {
-      // profit = quantity * (selling price - import price)
-      const importPr = item.importPrice || 0;
-      todayProfit += item.quantity * (item.price - importPr);
-    });
-    // subtract discount distributed
-    todayProfit -= inv.discountAmount || 0;
-  });
-
   // Render cards
   el.reportTodayRevenue.textContent = formatVND(todayRevenue);
-  el.reportTodayProfit.textContent = formatVND(Math.max(0, todayProfit));
   el.reportTodayInvoices.textContent = todayInvoices.length + ' đơn';
   el.reportTotalProductsCount.textContent = state.products.length + ' mã';
 
@@ -2141,6 +2283,9 @@ async function refreshReports() {
 
   // 5. Render Expiry warnings
   renderExpiryWarningTable();
+
+  // 6. Render Stock logs
+  renderStockLogsTable();
 }
 
 function renderExpiryWarningTable() {
@@ -2182,6 +2327,50 @@ function renderExpiryWarningTable() {
         <td class="text-right">${formatProductStock(p)}</td>
         <td>${formatDateDMY(exp)}</td>
         <td>${statusBadge}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+async function renderStockLogsTable() {
+  if (!window.dbHelper.getAllStockLogs || !el.stockLogsTbody) return;
+  
+  const logs = await window.dbHelper.getAllStockLogs();
+  
+  el.stockLogsCount.textContent = `${logs.length} lượt`;
+  
+  if (logs.length === 0) {
+    el.stockLogsTbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted py-4">Chưa có hoạt động xuất nhập kho nào được ghi nhận.</td></tr>`;
+    return;
+  }
+  
+  el.stockLogsTbody.innerHTML = logs.map(log => {
+    const isPositive = log.changeQuantity > 0;
+    const changeClass = isPositive ? 'text-green' : 'text-danger';
+    const changeSymbol = isPositive ? '+' : '';
+    
+    // Format reason
+    let reasonBadge = '';
+    if (log.reason === 'IMPORT') {
+      reasonBadge = `<span class="stock-indicator high">Nhập Kho</span>`;
+    } else if (log.reason === 'SALE') {
+      reasonBadge = `<span class="stock-indicator medium" style="background-color: var(--secondary-hover); color: var(--text-color); border-color: var(--secondary-hover);">Bán Hàng</span>`;
+    } else if (log.reason === 'VOID') {
+      reasonBadge = `<span class="stock-indicator low">Hủy Đơn</span>`;
+    } else {
+      reasonBadge = `<span class="stock-indicator" style="background-color: #e2e8f0; color: #475569; border-color: #cbd5e1;">Điều Chỉnh</span>`;
+    }
+    
+    return `
+      <tr>
+        <td>${formatDateTimeDMY(log.createdAt)}</td>
+        <td><strong>${log.productName}</strong></td>
+        <td><code>${log.barcode || '---'}</code></td>
+        <td class="${changeClass}" style="font-weight: 700;">${changeSymbol}${log.changeQuantity}</td>
+        <td>${log.beforeQuantity}</td>
+        <td>${log.afterQuantity}</td>
+        <td>${reasonBadge}</td>
+        <td class="text-muted" style="font-size: 12.5px;">${log.notes || '---'}</td>
       </tr>
     `;
   }).join('');
@@ -2681,6 +2870,11 @@ function registerSettingsEvents() {
           await window.dbHelper.deleteInvoice(inv.id);
         }
 
+        // 1.5 Clear stock logs
+        if (window.dbHelper.clearAllStockLogs) {
+          await window.dbHelper.clearAllStockLogs();
+        }
+
         // 2. If Cloud Sync is enabled, also clear Firestore database collections
         if (firestoreDb) {
           try {
@@ -2706,4 +2900,146 @@ function registerSettingsEvents() {
       }
     }
   });
+}
+
+// --- EXCEL CSV EXPORT / IMPORT SUPPORT ---
+
+function exportProductsToCSV() {
+  if (state.products.length === 0) {
+    showToast('Không có sản phẩm nào để xuất!', 'warning');
+    return;
+  }
+  
+  const headers = ['ID', 'Tên sản phẩm', 'Mã vạch', 'Danh mục', 'Đơn vị', 'Giá bán (VND)', 'Tồn kho', 'Ngày hết hạn', 'Đơn vị quy đổi', 'Số lượng quy đổi', 'Mã vạch quy đổi', 'Giá bán quy đổi (VND)'];
+  
+  const rows = state.products.map(p => [
+    p.id,
+    p.name.replace(/"/g, '""'),
+    p.barcode || '',
+    p.category || 'Khác',
+    p.unit || 'Cái',
+    p.price || 0,
+    p.stock || 0,
+    p.expiryDate || '',
+    p.hasConversion ? p.conversionUnit : '',
+    p.hasConversion ? p.conversionQuantity : '',
+    p.hasConversion ? p.conversionBarcode : '',
+    p.hasConversion ? p.conversionPrice : ''
+  ]);
+  
+  let csvContent = "\uFEFF"; // UTF-8 BOM
+  csvContent += headers.map(h => `"${h}"`).join(",") + "\n";
+  
+  rows.forEach(row => {
+    csvContent += row.map(val => `"${val}"`).join(",") + "\n";
+  });
+  
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const downloadAnchor = document.createElement('a');
+  downloadAnchor.setAttribute("href", url);
+  downloadAnchor.setAttribute("download", `Kho_Hang_ThanhDat_${new Date().toISOString().slice(0,10)}.csv`);
+  document.body.appendChild(downloadAnchor);
+  downloadAnchor.click();
+  downloadAnchor.remove();
+  showToast('Đã xuất file Excel (CSV) kho hàng!', 'success');
+}
+
+function parseCSVLine(line) {
+  const result = [];
+  let current = '';
+  let inQuotes = false;
+  
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === ',' && !inQuotes) {
+      result.push(current.trim());
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  result.push(current.trim());
+  return result.map(val => val.replace(/^"|"$/g, '').replace(/""/g, '"'));
+}
+
+function importProductsFromCSV(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = async (event) => {
+    try {
+      const text = event.target.result;
+      const lines = text.split("\n");
+      if (lines.length <= 1) throw new Error('File trống');
+      
+      let count = 0;
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        
+        const cleanValues = parseCSVLine(line);
+        if (cleanValues.length < 6) continue;
+        
+        const name = cleanValues[1];
+        if (!name) continue;
+        
+        const barcode = cleanValues[2];
+        const category = cleanValues[3] || 'Khác';
+        const unit = cleanValues[4] || 'Cái';
+        const price = Number(cleanValues[5]) || 0;
+        const stock = Number(cleanValues[6]) || 0;
+        const expiryDate = cleanValues[7] || '';
+        
+        const hasConversion = !!cleanValues[8];
+        const conversionUnit = cleanValues[8] || '';
+        const conversionQuantity = Number(cleanValues[9]) || 1;
+        const conversionBarcode = cleanValues[10] || '';
+        const conversionPrice = Number(cleanValues[11]) || 0;
+        
+        const prodData = {
+          name,
+          barcode,
+          category,
+          unit,
+          price,
+          stock,
+          expiryDate,
+          hasConversion,
+          conversionUnit,
+          conversionQuantity,
+          conversionBarcode,
+          conversionPrice
+        };
+        
+        const newId = await window.dbHelper.addProduct(prodData);
+        
+        if (stock > 0 && window.dbHelper.addStockLog) {
+          await window.dbHelper.addStockLog({
+            productId: newId,
+            productName: name,
+            barcode: barcode || '',
+            changeQuantity: stock,
+            beforeQuantity: 0,
+            afterQuantity: stock,
+            reason: 'IMPORT',
+            notes: 'Nhập từ file Excel (CSV)'
+          });
+        }
+        count++;
+      }
+      
+      showToast(`Đã nhập thành công ${count} sản phẩm từ file Excel (CSV)!`, 'success');
+      await reloadProducts();
+      renderInventoryTable();
+    } catch (err) {
+      console.error(err);
+      showToast('File Excel (CSV) không hợp lệ!', 'danger');
+    }
+    el.inventoryImportCSV.value = '';
+  };
+  reader.readAsText(file, "UTF-8");
 }

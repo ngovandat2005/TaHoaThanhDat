@@ -80,6 +80,9 @@
             <span id="header-time">12:00:00</span>
             <span id="header-date">07/06/2026</span>
           </div>
+          <button class="btn btn-secondary btn-icon" id="btn-keyboard-shortcuts" title="Xem hướng dẫn phím tắt" style="margin-right: 5px;">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="width: 20px; height: 20px;"><path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+          </button>
           <button class="btn btn-secondary btn-icon" id="btn-toggle-theme" title="Chuyển chế độ Sáng/Tối">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="width: 20px; height: 20px;"><path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
           </button>
@@ -265,18 +268,33 @@
                 <!-- Categories populated dynamically -->
               </select>
 
+              <select id="inventory-status-filter">
+                <option value="ALL">Tất cả trạng thái</option>
+                <option value="OUT_OF_STOCK">Đã hết hàng (Tồn = 0)</option>
+                <option value="LOW_STOCK">Tồn kho ít (Tồn ≤ 5)</option>
+                <option value="NEAR_EXPIRY">Hàng cận date / hết hạn</option>
+              </select>
+
               <button class="btn btn-primary" id="btn-open-add-product">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px; margin-right: 6px;"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
                 Thêm Sản Phẩm
               </button>
               
-              <button class="btn btn-outline" id="btn-export-products" title="Tải về dữ liệu sản phẩm dạng Excel/JSON">
+              <button class="btn btn-outline" id="btn-export-products" title="Tải về dữ liệu sản phẩm dạng JSON">
                 Xuất JSON
               </button>
               <button class="btn btn-outline" id="btn-import-products-trigger" title="Nhập dữ liệu sản phẩm từ file JSON">
                 Nhập JSON
               </button>
               <input type="file" id="inventory-import-file" accept=".json" style="display: none;">
+
+              <button class="btn btn-outline" id="btn-export-csv" title="Tải file Excel (CSV)">
+                Xuất Excel
+              </button>
+              <button class="btn btn-outline" id="btn-import-csv-trigger" title="Nhập từ file Excel (CSV)">
+                Nhập Excel
+              </button>
+              <input type="file" id="inventory-import-csv" accept=".csv" style="display: none;">
             </div>
           </div>
 
@@ -289,7 +307,6 @@
                   <th>Mã Vạch (Barcode)</th>
                   <th>Danh Mục</th>
                   <th>Đơn Vị</th>
-                  <th class="text-right">Giá Nhập</th>
                   <th class="text-right">Giá Bán</th>
                   <th>Hạn Sử Dụng</th>
                   <th class="text-right">Tồn Kho</th>
@@ -319,15 +336,7 @@
             </div>
           </div>
 
-          <div class="summary-card">
-            <div class="card-icon green">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
-            </div>
-            <div class="card-info">
-              <span>Lợi Nhuận Ước Tính</span>
-              <h3 id="report-today-profit" class="text-green">0 đ</h3>
-            </div>
-          </div>
+
 
           <div class="summary-card">
             <div class="card-icon orange">
@@ -413,6 +422,36 @@
               </thead>
               <tbody id="expiry-warning-tbody">
                 <tr><td colspan="6" class="text-center text-muted py-4">Đang phân tích hạn sử dụng...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- STOCK LOGS BOARD -->
+        <div class="card" style="margin: 20px; flex: none;">
+          <div class="card-header" style="background-color: rgba(16, 185, 129, 0.04); border-bottom-color: rgba(16, 185, 129, 0.1);">
+            <h3 style="color: var(--primary-color); display: flex; align-items: center; gap: 8px; font-size: 15px;">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" style="width: 18px; height: 18px;"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
+              Nhật Ký Nhập Xuất / Điều Chỉnh Tồn Kho
+            </h3>
+            <span class="stock-indicator high" id="stock-logs-count" style="font-size: 11px;">0 lượt</span>
+          </div>
+          <div class="table-container" style="max-height: 300px;">
+            <table style="font-size: 13px;">
+              <thead>
+                <tr>
+                  <th width="150">Thời Gian</th>
+                  <th>Tên Sản Phẩm</th>
+                  <th>Mã Vạch</th>
+                  <th>Thay Đổi</th>
+                  <th>Tồn Trước</th>
+                  <th>Tồn Sau</th>
+                  <th>Phân Loại</th>
+                  <th>Ghi Chú / Chi Tiết</th>
+                </tr>
+              </thead>
+              <tbody id="stock-logs-tbody">
+                <tr><td colspan="8" class="text-center text-muted py-4">Đang tải nhật ký kho...</td></tr>
               </tbody>
             </table>
           </div>
@@ -648,10 +687,6 @@
 
           <div class="form-grid">
             <div class="form-group">
-              <label for="prod-import-price">Giá nhập kho (đ):</label>
-              <input type="number" id="prod-import-price" value="0" min="0">
-            </div>
-            <div class="form-group">
               <label for="prod-price">Giá bán ra (đ): <span class="required">*</span></label>
               <input type="number" id="prod-price" value="0" min="0" required>
             </div>
@@ -683,10 +718,6 @@
               <input type="text" id="prod-conversion-barcode" placeholder="Mã vạch riêng của Lốc/Thùng...">
             </div>
             <div class="form-grid">
-              <div class="form-group">
-                <label for="prod-conversion-import-price">Giá nhập quy đổi (đ):</label>
-                <input type="number" id="prod-conversion-import-price" value="0" min="0">
-              </div>
               <div class="form-group">
                 <label for="prod-conversion-price">Giá bán quy đổi (đ):</label>
                 <input type="number" id="prod-conversion-price" value="0" min="0">
@@ -813,6 +844,36 @@
         <button class="btn btn-secondary btn-block" id="btn-close-mobile-invoice-bottom">
           Đóng &amp; Bán Tiếp
         </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- KEYBOARD SHORTCUTS MODAL -->
+  <div id="shortcuts-modal" class="modal-backdrop no-print" style="display: none; z-index: 1200;">
+    <div class="modal modal-sm" style="max-width: 320px;">
+      <div class="modal-header">
+        <h3>Phím Tắt Thu Ngân</h3>
+        <button class="close-modal" id="btn-close-shortcuts">&times;</button>
+      </div>
+      <div class="modal-body" style="padding: 16px;">
+        <div style="display: flex; flex-direction: column; gap: 12px; font-size: 13.5px;">
+          <div style="display: flex; justify-content: space-between; border-bottom: 1px dashed var(--border-color); padding-bottom: 8px;">
+            <kbd style="background: var(--secondary-color); padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border-color); font-weight: 700; box-shadow: var(--shadow-sm);">F2</kbd>
+            <span>Tìm kiếm sản phẩm</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; border-bottom: 1px dashed var(--border-color); padding-bottom: 8px;">
+            <kbd style="background: var(--secondary-color); padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border-color); font-weight: 700; box-shadow: var(--shadow-sm);">F8</kbd>
+            <span>Tiền khách đưa (F8)</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; border-bottom: 1px dashed var(--border-color); padding-bottom: 8px;">
+            <kbd style="background: var(--secondary-color); padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border-color); font-weight: 700; box-shadow: var(--shadow-sm);">F9</kbd>
+            <span>Thanh toán &amp; In hóa đơn</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; border-bottom: 1px dashed var(--border-color); padding-bottom: 8px;">
+            <kbd style="background: var(--secondary-color); padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border-color); font-weight: 700; box-shadow: var(--shadow-sm);">Esc</kbd>
+            <span>Đóng hộp thoại popup</span>
+          </div>
+        </div>
       </div>
     </div>
   </div>
